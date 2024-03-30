@@ -87,6 +87,7 @@ def moverLimpiezasConSusIncidencias(propertyID,token):
         estado = tarea["type_task_status"]["name"]
         if estado not in ["Finished", "Closed","In-Progress"]:
             moverAHoy(tarea["id"],token)
+            raise "yoooo ha llegado manin"
             
     
 def conexionBreezeway():
