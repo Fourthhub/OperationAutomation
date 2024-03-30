@@ -27,7 +27,7 @@ def hayReservaHoy(propertyID,token):
 def moverAHoy(task_id,token):
     try:
         hoy = datetime.now().strftime("%Y-%m-%d")
-        endpoint = URL + "public/inventory/v1/task/{task_id}"
+        endpoint = URL + f"public/inventory/v1/task/{task_id}"
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'JWT {token}'
@@ -35,9 +35,9 @@ def moverAHoy(task_id,token):
         payload = {
             "scheduled_date": f"{hoy}",
         }
-        raise EnvironmentError(endpoint)
+     
         response = requests.patch(endpoint, json=payload, headers=headers).json()
-        raise EnvironmentError(json.dumps(response))
+        
     except Exception as e:
         raise NameError(f"{e}") 
 
