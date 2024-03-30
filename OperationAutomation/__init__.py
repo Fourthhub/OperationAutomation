@@ -83,7 +83,6 @@ def moverLimpiezasConSusIncidencias(propertyID,token):
 
 
 # Iterar a través de las tareas y añadir  la prioridad de cada una
-    raise ValueError(json.dumps(response))
     for tarea in response["results"]:
         estado = tarea["type_task_status"]["name"]
         if estado not in ["Finished", "Closed","In-Progress"]:
