@@ -35,9 +35,10 @@ def moverAHoy(task_id,token):
         payload = {
             "scheduled_date": f"{hoy}",
         }
-        response = requests.patch(endpoint, json=payload, headers=headers)
+        response = requests.patch(endpoint, json=payload, headers=headers).json()
+        raise EnvironmentError(json.dumps(response))
     except Exception as e:
-        raise NameError(f"{e}")
+        raise NameError(f"{e}") 
 
 def ponerEnHigh(task_id,token):
     endpoint = URL + f"/public/inventory/v1/task/{task_id}"
@@ -49,6 +50,7 @@ def ponerEnHigh(task_id,token):
         "type_priority": "high",
     }
     response = requests.patch(endpoint, json=payload, headers=headers)
+    raise EnvironmentError(json.dumps(response))
 
 def corregirPrioridades(propertyID,token):
     year = datetime.now().year
