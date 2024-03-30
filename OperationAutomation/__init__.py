@@ -82,12 +82,13 @@ def moverLimpiezasConSusIncidencias(propertyID,token):
     response = requests.get(endpoint, headers=headers).json()
 
 
-# Iterar a través de las tareas y añadir  la prioridad de cada una 
+# Iterar a través de las tareas y añadir  la prioridad de cada una
+    raise json.dumps(response) 
     for tarea in response["results"]:
         estado = tarea["type_task_status"]["name"]
         if estado not in ["Finished", "Closed","In-Progress"]:
             moverAHoy(tarea["id"],token)
-            raise "yoooo ha llegado manin"
+            
             
     
 def conexionBreezeway():
