@@ -157,14 +157,17 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
     if token:
-        propertyID = 235728  # Ejemplo de ID de propiedad
-        updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
-        if hayReservaHoy(propertyID, token):              
-            updates_log.append(corregirPrioridades(propertyID, token))
-        return func.HttpResponse(
-            body=json.dumps({"message": "Tareas Actualizadas Correctamente", "updates": updates_log}),
-            status_code=200,
-            mimetype="application/json"
-        )
+         # Ejemplo de ID de propiedad
+        propiedades = conseguirPropiedades()
+        for propiedad in data['results']:
+            propertyID = propiedad["reference_property_id"]
+            updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
+            if hayReservaHoy(propertyID, token):              
+                updates_log.append(corregirPrioridades(propertyID, token))
+            return func.HttpResponse(
+                body=json.dumps({"message": "Tareas Actualizadas Correctamente", "updates": updates_log}),
+                status_code=200,
+                mimetype="application/json"
+            )
     else:
         return func.HttpResponse("Error al obtener token", status_code=400)
