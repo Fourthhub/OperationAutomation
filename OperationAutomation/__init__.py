@@ -24,35 +24,32 @@ def hayReservaHoy(propertyID,token):
     # Si termina el bucle sin encontrar ninguna fecha de check-in igual a la de hoy, devuelve False
         return False
 
-def moverAHoy(task_id,token):
+def moverAHoy(task_id, token):
     try:
         hoy = datetime.now().strftime("%Y-%m-%d")
         endpoint = URL + f"public/inventory/v1/task/{task_id}"
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'JWT {token}'
-        }
-        payload = {
-            "scheduled_date": f"{hoy}",
-        }
-     
-        response = requests.patch(endpoint, json=payload, headers=headers).json()
-        
+        headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
+        payload = {"scheduled_date": f"{hoy}"}
+        response = requests.patch(endpoint, json=payload, headers=headers)
+        if response.status_code == 200:
+            return f"Tarea {task_id} movida a hoy."
+        else:
+            return f"Error moviendo tarea {task_id} a hoy: {response.text}"
     except Exception as e:
-        raise NameError(f"{e}") 
+        return f"Excepción moviendo tarea {task_id} a hoy: {e}"
 
-def ponerEnHigh(task_id,token):
-    endpoint = URL + f"public/inventory/v1/task/{task_id}"
-
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'JWT {token}'
-    }
-    payload = {
-        "type_priority": "high"
-    }
-    response = requests.patch(endpoint, json=payload, headers=headers)
-    raise EnvironmentError(json.dumps(response) + "....." + endpoint)
+def ponerEnHigh(task_id, token):
+    try:
+        endpoint = URL + f"public/inventory/v1/task/{task_id}"
+        headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
+        payload = {"type_priority": "high"}
+        response = requests.patch(endpoint, json=payload, headers=headers)
+        if response.status_code == 200:
+            return f"Tarea {task_id} actualizada a prioridad alta."
+        else:
+            return f"Error actualizando tarea {task_id}: {response.text}"
+    except Exception as e:
+        return f"Excepción actualizando tarea {task_id}: {e}"
 
 def corregirPrioridades(propertyID,token):
     year = datetime.now().year
@@ -121,16 +118,16 @@ def conseguirPropiedades(token):
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     token = conexionBreezeway()
+    updates_log = []  # Para almacenar los logs de las actualizaciones
     if token:
-        #data = conseguirPropiedades(token)
-        #for propiedad in data['results']:
-            #propertyID = propiedad["reference_property_id"]
-        propertyID=235728
-        moverLimpiezasConSusIncidencias(propertyID,token)
-        if hayReservaHoy(propertyID,token):              
-            corregirPrioridades(propertyID,token)
-
-        # Convertir 'data' a una cadena JSON para enviar en la respuesta HTTP si es necesario
-        return func.HttpResponse("Tareas Actualizadas Correctamente", status_code=200, mimetype="application/json")
+        propertyID = 235728  # Ejemplo de ID de propiedad
+        updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
+        if hayReservaHoy(propertyID, token):              
+            updates_log.append(corregirPrioridades(propertyID, token))
+        return func.HttpResponse(
+            body=json.dumps({"message": "Tareas Actualizadas Correctamente", "updates": updates_log}),
+            status_code=200,
+            mimetype="application/json"
+        )
     else:
         return func.HttpResponse("Error al obtener token", status_code=400)
