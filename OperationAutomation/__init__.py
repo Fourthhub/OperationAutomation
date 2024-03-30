@@ -19,7 +19,7 @@ def conexionBreezeway():
     response = requests.post(endpoint, json=payload, headers=headers)
     print(response.text)
     # Asumiendo que la API devuelve un token JWT en un campo 'token' del JSON de respuesta
-    token = response.json().get('token')  # Ajustar la clave según la respuesta real
+    token = response.json().get('access_token')  # Ajustar la clave según la respuesta real
     return token
 
 def organizarTareas(token):
