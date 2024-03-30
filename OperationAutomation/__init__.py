@@ -39,27 +39,32 @@ def moverAHoy(task_id, token):
         hoy = datetime.now().strftime("%Y-%m-%d")
         endpoint = URL + f"public/inventory/v1/task/{task_id}"
         headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
-        payload = {"scheduled_date": f"{hoy}"}
+        payload = {"scheduled_date": hoy}
+        
         response = requests.patch(endpoint, json=payload, headers=headers)
+        
         if response.status_code == 200:
             return f"Tarea {task_id} movida a hoy."
         else:
-            return f"Error moviendo tarea {task_id} a hoy: {response.text}"
+            return f"Error moviendo tarea {task_id} a hoy: {response.status_code} {response.text}"
     except Exception as e:
         return f"Excepción moviendo tarea {task_id} a hoy: {e}"
+
 
 def ponerEnHigh(task_id, token):
     try:
         endpoint = URL + f"public/inventory/v1/task/{task_id}"
         headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
         payload = {"type_priority": "high"}
+        
         response = requests.patch(endpoint, json=payload, headers=headers)
+        
         if response.status_code == 200:
             return f"Tarea {task_id} actualizada a prioridad alta."
         else:
-            return f"Error actualizando tarea {task_id}: {response.text}"
+            return f"Error actualizando tarea {task_id} a prioridad alta: {response.status_code} {response.text}"
     except Exception as e:
-        return f"Excepción actualizando tarea {task_id}: {e}"
+        return f"Excepción actualizando tarea {task_id} a prioridad alta: {e}"
 
 def corregirPrioridades(propertyID, token):
     try:
