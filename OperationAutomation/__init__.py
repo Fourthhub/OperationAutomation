@@ -121,7 +121,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         #data = conseguirPropiedades(token)
         #for propiedad in data['results']:
             #propertyID = propiedad["reference_property_id"]
-        propertyID=235734
+        propertyID=235728
         moverLimpiezasConSusIncidencias(propertyID,token)
         if hayReservaHoy(propertyID,token):              
             corregirPrioridades(propertyID,token)
