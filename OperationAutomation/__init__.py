@@ -8,21 +8,31 @@ CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID = 8172
 
-def hayReservaHoy(propertyID,token):
-    endpoint = URL + f"public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'JWT {token}'
-    }
-    response = requests.get(endpoint, headers=headers).json()
-    fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-    # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
-    for reserva in response:
-        if reserva["checkin_date"] == fecha_hoy:
-            return True
-    
-    # Si termina el bucle sin encontrar ninguna fecha de check-in igual a la de hoy, devuelve False
-        return False
+def hayReservaHoy(propertyID, token):
+    try:
+        endpoint = URL + f"public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'JWT {token}'
+        }
+        response = requests.get(endpoint, headers=headers)
+        
+        # Verificar si la respuesta HTTP es exitosa
+        if response.status_code == 200:
+            reservas = response.json()
+            fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+            # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
+            for reserva in reservas:
+                if reserva["checkin_date"] == fecha_hoy:
+                    return True  # Reserva encontrada para hoy
+            return False  # No se encontraron reservas para hoy
+        else:
+            # Si la respuesta HTTP no es exitosa, levantar una excepción con el código de estado y el cuerpo de la respuesta
+            raise Exception(f"Error al consultar reservas: {response.status_code} - {response.text}")
+    except Exception as e:
+        # Levantar cualquier excepción capturada durante la solicitud HTTP
+        raise Exception(f"Excepción al consultar reservas: {e}")
+
 
 def moverAHoy(task_id, token):
     try:
@@ -51,44 +61,71 @@ def ponerEnHigh(task_id, token):
     except Exception as e:
         return f"Excepción actualizando tarea {task_id}: {e}"
 
-def corregirPrioridades(propertyID,token):
-    year = datetime.now().year
-    start_date = f"{year}-01-01"
-    end_date = f"{year}-12-31"
-    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'JWT {token}'
-    }
-    response = requests.get(endpoint, headers=headers).json()
-
-# Iterar a través de las tareas y añadir  la prioridad de cada una 
-    for tarea in response["results"]:
-        estado = tarea["type_task_status"]["name"]
-        if estado not in ["Finished", "Closed"]:
-            ponerEnHigh(tarea["id"],token)
+def corregirPrioridades(propertyID, token):
+    try:
+        year = datetime.now().year
+        start_date = f"{year}-01-01"
+        end_date = f"{year}-12-31"
+        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'JWT {token}'
+        }
+        response = requests.get(endpoint, headers=headers)
         
+        # Verificar si la respuesta HTTP es exitosa
+        if response.status_code == 200:
+            tasks = response.json()["results"]
+            for task in tasks:
+                estado = task["type_task_status"]["name"]
+                if estado not in ["Finished", "Closed"]:
+                    # Aquí, asumiendo que ponerEnHigh maneja sus propios errores internamente
+                    # o devuelve un mensaje de error sin levantar una excepción.
+                    ponerEnHigh(task["id"], token)
+        else:
+            # Levantar una excepción si la respuesta de la API no es exitosa
+            raise Exception(f"Error al consultar tareas: {response.status_code} - {response.text}")
+    except requests.exceptions.RequestException as e:
+        # Capturar errores específicos de las solicitudes y levantar una excepción
+        raise Exception(f"Error de solicitud al consultar tareas: {e}")
+    except Exception as e:
+        # Levantar cualquier otra excepción que ocurra durante el proceso
+        raise Exception(f"Excepción al corregir prioridades: {e}")
+
             
             
-def moverLimpiezasConSusIncidencias(propertyID,token):
-    
-    year = datetime.now().year
-    start_date = f"{year}-01-01"
-    end_date = datetime.now().strftime("%Y-%m-%d")
-    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'JWT {token}'
-    }
-    
-    response = requests.get(endpoint, headers=headers).json()
+def moverLimpiezasConSusIncidencias(propertyID, token):
+    try:
+        year = datetime.now().year
+        start_date = f"{year}-01-01"
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'JWT {token}'
+        }
 
+        response = requests.get(endpoint, headers=headers)
+        
+        # Verificar si la respuesta HTTP es exitosa
+        if response.status_code == 200:
+            tasks = response.json()["results"]
+            for task in tasks:
+                estado = task["type_task_status"]["name"]
+                if estado not in ["Finished", "Closed", "In-Progress"]:
+                    # Asumiendo que moverAHoy gestiona internamente cualquier error o excepción
+                    moverAHoy(task["id"], token)
+        else:
+            # Levantar una excepción si la respuesta de la API no es exitosa
+            raise Exception(f"Error al consultar tareas para mover: {response.status_code} - {response.text}")
+            
+    except requests.exceptions.RequestException as e:
+        # Capturar errores específicos de las solicitudes y levantar una excepción
+        raise Exception(f"Error de solicitud al consultar tareas para mover: {e}")
+    except Exception as e:
+        # Levantar cualquier otra excepción que ocurra durante el proceso
+        raise Exception(f"Excepción al mover limpiezas e incidencias: {e}")
 
-# Iterar a través de las tareas y añadir  la prioridad de cada una
-    for tarea in response["results"]:
-        estado = tarea["type_task_status"]["name"]
-        if estado not in ["Finished", "Closed","In-Progress"]:
-            moverAHoy(tarea["id"],token)
             
             
     
