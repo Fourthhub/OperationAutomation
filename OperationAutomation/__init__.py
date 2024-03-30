@@ -9,7 +9,7 @@ CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID = 8172
 
 def hayReservaHoy(propertyID,token):
-    endpoint = URL + f"/public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
+    endpoint = URL + f"public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
@@ -27,7 +27,7 @@ def hayReservaHoy(propertyID,token):
 def moverAHoy(task_id,token):
     try:
         hoy = datetime.now().strftime("%Y-%m-%d")
-        endpoint = URL + "/public/inventory/v1/task/{task_id}"
+        endpoint = URL + "public/inventory/v1/task/{task_id}"
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'JWT {token}'
@@ -41,7 +41,7 @@ def moverAHoy(task_id,token):
         raise NameError(f"{e}") 
 
 def ponerEnHigh(task_id,token):
-    endpoint = URL + f"/public/inventory/v1/task/{task_id}"
+    endpoint = URL + f"public/inventory/v1/task/{task_id}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
@@ -56,7 +56,7 @@ def corregirPrioridades(propertyID,token):
     year = datetime.now().year
     start_date = f"{year}-01-01"
     end_date = f"{year}-12-31"
-    endpoint = URL + f"/public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
+    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
@@ -76,7 +76,7 @@ def moverLimpiezasConSusIncidencias(propertyID,token):
     year = datetime.now().year
     start_date = f"{year}-01-01"
     end_date = datetime.now().strftime("%Y-%m-%d")
-    endpoint = URL + f"/public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
+    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
