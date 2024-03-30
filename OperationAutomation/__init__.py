@@ -83,6 +83,7 @@ def moverLimpiezasConSusIncidencias(propertyID,token):
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
     }
+    
     response = requests.get(endpoint, headers=headers).json()
 
 
