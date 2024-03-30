@@ -15,9 +15,8 @@ def hayReservaHoy(propertyID,token):
         'Authorization': f'JWT {token}'
     }
     response = requests.get(endpoint, headers=headers).json()
-    
     fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-    
+    return response
     # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
     for reserva in response:
         if reserva["checkin_date"] == fecha_hoy:
@@ -118,6 +117,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             #propertyID = propiedad["reference_property_id"]
         propertyID=235734
         moverLimpiezasConSusIncidencias(propertyID,token)
+
+        return hayReservaHoy(propertyID,token)
         if hayReservaHoy(propertyID,token):              
             corregirPrioridades(propertyID,token)
 
