@@ -163,7 +163,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     updates_log = []  # Para almacenar los logs de las actualizaciones
     if token:
          # Ejemplo de ID de propiedad
-        propiedades = conseguirPropiedades()
+        propiedades = conseguirPropiedades(token)
         for propiedad in data['results']:
             propertyID = propiedad["reference_property_id"]
             updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
