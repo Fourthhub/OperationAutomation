@@ -16,7 +16,6 @@ def hayReservaHoy(propertyID,token):
     }
     response = requests.get(endpoint, headers=headers).json()
     fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-    return json.dumps(response)
     # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
     for reserva in response:
         if reserva["checkin_date"] == fecha_hoy:
@@ -26,16 +25,19 @@ def hayReservaHoy(propertyID,token):
         return False
 
 def moverAHoy(task_id,token):
-    hoy = datetime.now().strftime("%Y-%m-%d")
-    endpoint = URL + "/public/inventory/v1/task/{task_id}"
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'JWT {token}'
-    }
-    payload = {
-        "scheduled_date": f"{hoy}",
-    }
-    response = requests.patch(endpoint, json=payload, headers=headers)
+    try:
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        endpoint = URL + "/public/inventory/v1/task/{task_id}"
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'JWT {token}'
+        }
+        payload = {
+            "scheduled_date": f"{hoy}",
+        }
+        response = requests.patch(endpoint, json=payload, headers=headers)
+    except Exception as e:
+        raise NameError(f"{e}")
 
 def ponerEnHigh(task_id,token):
     endpoint = URL + f"/public/inventory/v1/task/{task_id}"
@@ -68,6 +70,7 @@ def corregirPrioridades(propertyID,token):
             
             
 def moverLimpiezasConSusIncidencias(propertyID,token):
+    
     year = datetime.now().year
     start_date = f"{year}-01-01"
     end_date = datetime.now().strftime("%Y-%m-%d")
@@ -77,6 +80,7 @@ def moverLimpiezasConSusIncidencias(propertyID,token):
         'Authorization': f'JWT {token}'
     }
     response = requests.get(endpoint, headers=headers).json()
+
 
 # Iterar a través de las tareas y añadir  la prioridad de cada una 
     for tarea in response["results"]:
@@ -117,8 +121,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             #propertyID = propiedad["reference_property_id"]
         propertyID=235734
         moverLimpiezasConSusIncidencias(propertyID,token)
-
-        return hayReservaHoy(propertyID,token)
         if hayReservaHoy(propertyID,token):              
             corregirPrioridades(propertyID,token)
 
