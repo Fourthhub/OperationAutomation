@@ -9,7 +9,7 @@ CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID = 8172
 
 def hayReservaHoy(propertyID,token):
-    endpoint = URL + "/public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
+    endpoint = URL + f"/public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
