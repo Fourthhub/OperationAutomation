@@ -49,7 +49,7 @@ def ponerEnHigh(task_id,token):
         'Authorization': f'JWT {token}'
     }
     payload = {
-        "type_priority": "high",
+        "type_priority": "high"
     }
     response = requests.patch(endpoint, json=payload, headers=headers)
     raise EnvironmentError(json.dumps(response) + "....." + endpoint)
