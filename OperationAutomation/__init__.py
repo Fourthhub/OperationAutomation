@@ -16,7 +16,7 @@ def hayReservaHoy(propertyID,token):
     }
     response = requests.get(endpoint, headers=headers).json()
     fecha_hoy = datetime.now().strftime("%Y-%m-%d")
-    return response
+    return response.json()
     # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
     for reserva in response:
         if reserva["checkin_date"] == fecha_hoy:
