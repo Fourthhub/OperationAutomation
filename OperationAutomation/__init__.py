@@ -35,6 +35,7 @@ def hayReservaHoy(propertyID, token):
 
 
 def moverAHoy(task_id, token):
+    hoy = datetime.now().strftime("%Y-%m-%d")
     try:
         hoy = datetime.now().strftime("%Y-%m-%d")
         endpoint = URL + f"public/inventory/v1/task/{task_id}"
@@ -44,7 +45,7 @@ def moverAHoy(task_id, token):
         response = requests.patch(endpoint, json=payload, headers=headers)
         
         if response.status_code in [200,201,202,204]:
-            return f"Tarea {task_id} movida a hoy."
+            return f"Tarea {task_id} movida a {hoy}."
         else:
             return f"Error moviendo tarea {task_id} a hoy: {response.status_code} {response.text}"
     except Exception as e:
@@ -115,7 +116,6 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
         if response.status_code in [200,201,202,204]:
             tasks = response.json()["results"]
             respuesta_log = []
-            respuesta_log.append("No hay tareas pendientes, status:" + str(response.status_code))
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed", "In-Progress"]:
