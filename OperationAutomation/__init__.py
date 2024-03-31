@@ -87,7 +87,7 @@ def corregirPrioridades(propertyID, token):
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
-                 respuesta_log.append(ponerEnHigh(task["id"], token))
+                    respuesta_log.append(ponerEnHigh(task["id"], token))
             return respuesta_log
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
@@ -175,7 +175,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 continue
             updates_log.append(propiedad["name"] + ":" + str(moverLimpiezasConSusIncidencias(propertyID, token)))
             if hayReservaHoy(propertyID, token):              
-                updates_log.append(propiedad["name"] + ":" + corregirPrioridades(propertyID, token))
+                updates_log.append(propiedad["name"] + ":" + str(corregirPrioridades(propertyID, token)))
         return func.HttpResponse(
             body=json.dumps({"message": "Tareas Actualizadas Correctamente", "updates": updates_log}),
             status_code=200,
