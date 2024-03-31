@@ -86,7 +86,7 @@ def corregirPrioridades(propertyID, token):
                 if estado not in ["Finished", "Closed"]:
                     # Aquí, asumiendo que ponerEnHigh maneja sus propios errores internamente
                     # o devuelve un mensaje de error sin levantar una excepción.
-                    ponerEnHigh(task["id"], token)
+                    return ponerEnHigh(task["id"], token)
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
             raise Exception(f"Error al consultar tareas: {response.status_code} - {response.text}")
@@ -119,7 +119,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed", "In-Progress"]:
                     # Asumiendo que moverAHoy gestiona internamente cualquier error o excepción
-                    moverAHoy(task["id"], token)
+                    return moverAHoy(task["id"], token)
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
             raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
@@ -169,9 +169,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             propertyID=propiedad["reference_property_id"]
             if propertyID==None or propiedad["status"]!="active":
                 continue
-            updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
+            updates_log.append(propiedad["name"] + ":" + moverLimpiezasConSusIncidencias(propertyID, token))
             if hayReservaHoy(propertyID, token):              
-                updates_log.append(corregirPrioridades(propertyID, token))
+                updates_log.append(propiedad["name"] + ":" + corregirPrioridades(propertyID, token))
         return func.HttpResponse(
             body=json.dumps({"message": "Tareas Actualizadas Correctamente", "updates": updates_log}),
             status_code=200,
