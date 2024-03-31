@@ -1,12 +1,14 @@
 import requests
 import json
 import azure.functions as func
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 URL = "https://api.breezeway.io/"
 CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID =8172
+zona_horaria_españa = ZoneInfo("Europe/Madrid")
 
 def hayReservaHoy(propertyID, token):
     try:
@@ -20,7 +22,7 @@ def hayReservaHoy(propertyID, token):
         # Verificar si la respuesta HTTP es exitosa
         if response.status_code in [200,201,202,204]:
             reservas = response.json()
-            fecha_hoy = datetime.now().strftime("%Y-%m-%d")
+            fecha_hoy = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
             # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
             for reserva in reservas:
                 if reserva["checkin_date"] == fecha_hoy:
@@ -35,9 +37,9 @@ def hayReservaHoy(propertyID, token):
 
 
 def moverAHoy(task_id, token):
-    hoy = datetime.now().strftime("%Y-%m-%d")
+    hoy = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
     try:
-        hoy = datetime.now().strftime("%Y-%m-%d")
+        hoy = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
         endpoint = URL + f"public/inventory/v1/task/{task_id}"
         headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
         payload = {"scheduled_date": hoy}
@@ -103,7 +105,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
     try:
         year = datetime.now().year
         start_date = f"{year}-01-01"
-        end_date = datetime.now().strftime("%Y-%m-%d")
+        end_date = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
         endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
         headers = {
             'Content-Type': 'application/json',
