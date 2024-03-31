@@ -71,10 +71,8 @@ def ponerEnHigh(task_id, token):
 
 def corregirPrioridades(propertyID, token):
     try:
-        year = datetime.now().year
-        start_date = f"{year}-01-01"
-        end_date = f"{year}-12-31"
-        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
+        hoy = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
+        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={hoy},{hoy}"
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'JWT {token}'
@@ -87,7 +85,6 @@ def corregirPrioridades(propertyID, token):
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
-                    
                     return ponerEnHigh(task["id"], token)
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
