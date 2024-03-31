@@ -18,7 +18,7 @@ def hayReservaHoy(propertyID, token):
         response = requests.get(endpoint, headers=headers)
         
         # Verificar si la respuesta HTTP es exitosa
-        if response.status_code == 200:
+        if response.status_code in [200,201,202,204]:
             reservas = response.json()
             fecha_hoy = datetime.now().strftime("%Y-%m-%d")
             # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
@@ -43,7 +43,7 @@ def moverAHoy(task_id, token):
         
         response = requests.patch(endpoint, json=payload, headers=headers)
         
-        if response.status_code == 200:
+        if response.status_code in [200,201,202,204]:
             return f"Tarea {task_id} movida a hoy."
         else:
             return f"Error moviendo tarea {task_id} a hoy: {response.status_code} {response.text}"
@@ -114,12 +114,14 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
         # Verificar si la respuesta HTTP es exitosa
         if response.status_code in [200,201,202,204]:
             tasks = response.json()["results"]
+            respuesta_log = []
+            respuesta_log.append("No hay tareas pendientes, status:" + str(response.status_code))
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed", "In-Progress"]:
                     # Asumiendo que moverAHoy gestiona internamente cualquier error o excepción
-                    moverAHoy(task["id"], token)
-            return "tareas movidas o ninguna por mover"
+                    respuesta_log.append(moverAHoy(task["id"], token))
+            return 
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
             raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
