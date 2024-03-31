@@ -59,7 +59,7 @@ def ponerEnHigh(task_id, token):
         
         response = requests.patch(endpoint, json=payload, headers=headers)
         
-        if response.status_code == 200:
+        if response.status_code in [200, 202, 204]:
             return f"Tarea {task_id} actualizada a prioridad alta."
         else:
             return f"Error actualizando tarea {task_id} a prioridad alta: {response.status_code} {response.text}"
@@ -79,13 +79,12 @@ def corregirPrioridades(propertyID, token):
         response = requests.get(endpoint, headers=headers)
         
         # Verificar si la respuesta HTTP es exitosa
-        if response.status_code == 200:
+        if response.status_code in [200, 202, 204]:
             tasks = response.json()["results"]
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
-                    # Aquí, asumiendo que ponerEnHigh maneja sus propios errores internamente
-                    # o devuelve un mensaje de error sin levantar una excepción.
+                    
                     return ponerEnHigh(task["id"], token)
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
@@ -113,7 +112,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
         response = requests.get(endpoint, headers=headers)
         
         # Verificar si la respuesta HTTP es exitosa
-        if response.status_code == 200:
+        if response.status_code in [200, 202, 204]:
             tasks = response.json()["results"]
             for task in tasks:
                 estado = task["type_task_status"]["name"]
