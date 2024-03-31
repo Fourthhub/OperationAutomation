@@ -122,7 +122,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
                     moverAHoy(task["id"], token)
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
-            raise Exception(f"Error al consultar tareas para mover: {response.status_code} - {response.text}")
+            raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
             
     except requests.exceptions.RequestException as e:
         # Capturar errores específicos de las solicitudes y levantar una excepción
