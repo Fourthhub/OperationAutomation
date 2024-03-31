@@ -164,7 +164,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if token:
          # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
-        for propiedad in data['results']:
+        for propiedad in propiedades['results']:
             propertyID = propiedad["reference_property_id"]
             updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
             if hayReservaHoy(propertyID, token):              
