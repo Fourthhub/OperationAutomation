@@ -70,6 +70,7 @@ def ponerEnHigh(task_id, token):
         return f"Excepción actualizando tarea {task_id} a prioridad alta: {e}"
 
 def corregirPrioridades(propertyID, token):
+    respuesta_log = []
     try:
         hoy = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
         endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={hoy},{hoy}"
@@ -82,10 +83,12 @@ def corregirPrioridades(propertyID, token):
         # Verificar si la respuesta HTTP es exitosa
         if response.status_code in [200,201,202,204]:
             tasks = response.json()["results"]
+            
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
-                    return ponerEnHigh(task["id"], token)
+                 respuesta_log.append(ponerEnHigh(task["id"], token))
+            return respuesta_log
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
             raise Exception(f"Error al consultar tareas: {response.status_code} - {response.text}")
