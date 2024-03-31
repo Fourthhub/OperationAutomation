@@ -167,7 +167,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         
         for propiedad in propiedades["results"]:
             propertyID=propiedad["reference_property_id"]
-            if propertyID==None:
+            if propertyID==None or propiedad["status"]!="active":
                 continue
             updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
             if hayReservaHoy(propertyID, token):              
