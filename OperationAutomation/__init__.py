@@ -164,6 +164,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if token:
          # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
+        return json.dumps(propiedades)
         for propiedad in propiedades["results"]:
             propertyID = propiedad["reference_property_id"]
             return propertyID
