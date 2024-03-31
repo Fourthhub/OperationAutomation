@@ -119,9 +119,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed", "In-Progress"]:
                     # Asumiendo que moverAHoy gestiona internamente cualquier error o excepción
-                    return moverAHoy(task["id"], token)
-                else:
-                    return "Ninguna tarea pendiente"
+                    moverAHoy(task["id"], token)
+            return "tareas movidas o ninguna por mover"
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
             raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
