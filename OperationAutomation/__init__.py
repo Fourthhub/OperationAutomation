@@ -6,7 +6,7 @@ from datetime import datetime
 URL = "https://api.breezeway.io/"
 CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
-COMPANY_ID = 8172
+COMPANY_ID =8172
 
 def hayReservaHoy(propertyID, token):
     try:
@@ -156,7 +156,7 @@ def conseguirPropiedades(token):
         'Authorization': f'JWT {token}'
     }
     response = requests.get(endpoint, headers=headers)
-    return response.json()  # Asumiendo que quieres devolver el JSON respuesta
+    return response.json()
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     token = conexionBreezeway()
@@ -164,6 +164,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if token:
          # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
+        return json.dumps(propiedades)
         for propiedad in propiedades['results']:
             propertyID = propiedad["reference_property_id"]
             updates_log.append(moverLimpiezasConSusIncidencias(propertyID, token))
