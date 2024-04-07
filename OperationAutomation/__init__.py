@@ -128,7 +128,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
-                   if task["scheduled_date"] is None or espasado(task["scheduled_date"]):
+                    respuesta_log.append(task["type_task_status"]["name"])
+                    if task["scheduled_date"] is None or espasado(task["scheduled_date"]):
                         respuesta_log.append(moverAHoy(task["id"], token))
             return respuesta_log
         else:
