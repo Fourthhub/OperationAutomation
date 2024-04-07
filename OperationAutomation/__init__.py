@@ -28,6 +28,8 @@ def hayReservaHoy(propertyID, token):
             # Buscar si alguna reserva tiene la fecha de check-in igual a la fecha de hoy
             for reserva in reservas:
                 if reserva["checkin_date"] == fecha_hoy:
+                   # if (vieneConPerro()):
+                    #    (crearTareaDePerro)
                     return True  # Reserva encontrada para hoy
             return False  # No se encontraron reservas para hoy
         else:
@@ -39,6 +41,7 @@ def hayReservaHoy(propertyID, token):
 
 
 def moverAHoy(task_id, token):
+    
     try:
         endpoint = URL + f"public/inventory/v1/task/{task_id}"
         headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
@@ -101,11 +104,17 @@ def corregirPrioridades(propertyID, token):
             
             
 def moverLimpiezasConSusIncidencias(propertyID, token):
+    def espasado(fechaTarea):
+        fecha_hoy = datetime.strptime(fecha_hoy, "%Y-%m-%d")
+        fecha_a_comparar = datetime.strptime(fechaTarea, "%Y-%m-%d")
+        return fecha_a_comparar < fecha_hoy
     try:
         year = datetime.now().year
         start_date = f"{year}-01-01"
         end_date = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
-        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={start_date},{end_date}"
+        start_date_formatoDistinto = fecha_hoy.strftime("%Y-%m-%dT00:00:00Z")
+        end_date_formatoDistinto = end_date.strftime("%Y-%m-%dT00:00:00Z")
+        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date,end_date}"
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'JWT {token}'
@@ -120,8 +129,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
-                    # Asumiendo que moverAHoy gestiona internamente cualquier error o excepción
-                    respuesta_log.append(moverAHoy(task["id"], token))
+                   if task["scheduled_date"] is None or espasado(task["scheduled_date"]):
+                        respuesta_log.append(moverAHoy(task["id"], token))
             return respuesta_log
         else:
             # Levantar una excepción si la respuesta de la API no es exitosa
@@ -175,6 +184,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             updates_log.append(propiedad["name"] + ":" + str(moverLimpiezasConSusIncidencias(propertyID, token)))
             if hayReservaHoy(propertyID, token):              
                 updates_log.append(propiedad["name"] + ":" + str(corregirPrioridades(propertyID, token)))
+
         return func.HttpResponse(
             body=json.dumps({"message": "Tareas Actualizadas Correctamente", "updates": updates_log}),
             status_code=200,
