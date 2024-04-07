@@ -105,7 +105,6 @@ def corregirPrioridades(propertyID, token):
             
 def moverLimpiezasConSusIncidencias(propertyID, token):
     def espasado(fechaTarea):
-        fecha_hoy = datetime.strptime(fecha_hoy, "%Y-%m-%d")
         fecha_a_comparar = datetime.strptime(fechaTarea, "%Y-%m-%d")
         return fecha_a_comparar < fecha_hoy
     try:
