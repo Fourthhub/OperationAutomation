@@ -110,9 +110,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
         return fecha_a_comparar < fecha_hoy
     try:
         year = datetime.now().year
-        start_date = f"{year}-01-01"
-        end_date = datetime.now(zona_horaria_españa).strftime("%Y-%m-%d")
-        start_date_formatoDistinto = fecha_hoy.strftime("%Y-%m-%dT00:00:00Z")
+        start_date = f"{year}-01-01T00:00:00Z"
+        end_date = datetime.now(zona_horaria_españa)
         end_date_formatoDistinto = end_date.strftime("%Y-%m-%dT00:00:00Z")
         endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date,end_date}"
         headers = {
