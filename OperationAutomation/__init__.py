@@ -124,10 +124,9 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
         # Verificar si la respuesta HTTP es exitosa
         if response.status_code in [200,201,202,204]:
             respuesta_log = []
-            respuesta_log.append(task["name"])
             tasks = response.json()["results"]
-            
             for task in tasks:
+                respuesta_log.append(task["name"])
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
                     if task["scheduled_date"] is None or espasado(task["scheduled_date"]):
