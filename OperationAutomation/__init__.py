@@ -85,7 +85,6 @@ def corregirPrioridades(propertyID, token):
         # Verificar si la respuesta HTTP es exitosa
         if response.status_code in [200,201,202,204]:
             tasks = response.json()["results"]
-            
             for task in tasks:
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
