@@ -113,9 +113,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
     try:
         year = datetime.now().year
         start_date = f"{year}-01-01"
-        end_date = datetime.now(zona_horaria_españa)
-        end_date_formatoDistinto = end_date.strftime("%Y-%m-%d")
-        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{end_date}"
+        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}"
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'JWT {token}'
