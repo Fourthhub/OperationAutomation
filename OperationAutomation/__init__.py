@@ -105,15 +105,17 @@ def corregirPrioridades(propertyID, token):
             
 def moverLimpiezasConSusIncidencias(propertyID, token):
     def espasado(fechaTarea):
+        if fechaTarea is None:
+            return True  
         fecha_hoy1 = datetime.strptime(fecha_hoy, "%Y-%m-%d")
         fecha_a_comparar = datetime.strptime(fechaTarea, "%Y-%m-%d")
         return fecha_a_comparar < fecha_hoy1
     try:
         year = datetime.now().year
-        start_date = f"{year}-01-01T00:00:00"
+        start_date = f"{year}-01-01"
         end_date = datetime.now(zona_horaria_españa)
-        end_date_formatoDistinto = end_date.strftime("%Y-%m-%dT00:00:00Z")
-        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}"
+        end_date_formatoDistinto = end_date.strftime("%Y-%m-%d")
+        endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{end_date}"
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'JWT {token}'
@@ -129,7 +131,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
                 respuesta_log.append(task["name"])
                 estado = task["type_task_status"]["name"]
                 if estado not in ["Finished", "Closed"]:
-                    if task["scheduled_date"] is None or espasado(task["scheduled_date"]):
+                    if espasado(task["scheduled_date"]):
                         respuesta_log.append(moverAHoy(task["id"], token))
             return respuesta_log
         else:
