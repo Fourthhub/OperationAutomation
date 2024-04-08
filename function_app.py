@@ -170,7 +170,7 @@ def conseguirPropiedades(token):
     response = requests.get(endpoint, headers=headers)
     return response.json()
 
-@app.function_name(name="OperationAutomation")
+@app.function_name(name="operationautomation")
 @app.schedule(schedule="0 22 21 * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False)
 def OperationAutomation(myTimer: func.TimerRequest) -> None:
