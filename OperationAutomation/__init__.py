@@ -12,6 +12,7 @@ zona_horaria_españa = ZoneInfo("Europe/Madrid")
 fecha_hoy = datetime.now(zona_horaria_españa)
 fecha_hoy = fecha_hoy + timedelta(days=1)
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
+app = func.FunctionApp()
 
 def hayReservaHoy(propertyID, token):
     try:
@@ -169,7 +170,10 @@ def conseguirPropiedades(token):
     response = requests.get(endpoint, headers=headers)
     return response.json()
 
-def main(req: func.HttpRequest) -> func.HttpResponse:
+@app.function_name(name="OperationAutomation")
+@app.schedule(schedule="0 0 23 * * *", arg_name="myTimer", run_on_startup=False,
+              use_monitor=False)
+def OperationAutomation(myTimer: func.TimerRequest) -> None:
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
     if token:
@@ -184,10 +188,5 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             if hayReservaHoy(propertyID, token):              
                 updates_log.append(propiedad["name"] + ":" + str(corregirPrioridades(propertyID, token)))
 
-        return func.HttpResponse(
-            body=json.dumps({"message": "Tareas Actualizadas Correctamente", "updates": updates_log}),
-            status_code=200,
-            mimetype="application/json"
-            )
     else:
-        return func.HttpResponse("Error al obtener token", status_code=400)
+        raise BaseException("Error al acceder a breezeway")
