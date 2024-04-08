@@ -171,7 +171,7 @@ def conseguirPropiedades(token):
     return response.json()
 
 @app.function_name(name="OperationAutomation")
-@app.schedule(schedule="0 15 23 * * *", arg_name="myTimer", run_on_startup=False,
+@app.schedule(schedule="0 22 21 * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False)
 def OperationAutomation(myTimer: func.TimerRequest) -> None:
     token = conexionBreezeway()
