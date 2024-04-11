@@ -171,9 +171,9 @@ def conseguirPropiedades(token):
     return response.json()
 
 @app.function_name(name="operationautomation")
-@app.schedule(schedule="0 22 21 * * *", arg_name="myTimer", run_on_startup=False,
+@app.schedule(schedule="0 0 23 * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False)
-def OperationAutomation(myTimer: func.TimerRequest) -> None:
+def operationautomation(myTimer: func.TimerRequest) -> None:
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
     if token:
