@@ -171,7 +171,7 @@ def conseguirPropiedades(token):
     return response.json()
 
 @app.function_name(name="operationautomation")
-@app.timer_trigger(schedule="0 0 21 * * *", 
+@app.schedule(schedule="0 38 8 * * *", 
               arg_name="myTimer",
               run_on_startup=False) 
 def operationautomation(myTimer: func.TimerRequest) -> None:
@@ -180,7 +180,6 @@ def operationautomation(myTimer: func.TimerRequest) -> None:
     if token:
          # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
-        
         for propiedad in propiedades["results"]:
             propertyID=propiedad["reference_property_id"]
             if propertyID==None or propiedad["status"]!="active":
