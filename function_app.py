@@ -10,7 +10,8 @@ CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID =8172
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
 fecha_hoy = datetime.now(zona_horaria_españa)
-fecha_hoy = fecha_hoy + timedelta(days=1)
+#+ timedelta(days=1)
+fecha_hoy = fecha_hoy 
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
 app = func.FunctionApp()
 
@@ -170,11 +171,7 @@ def conseguirPropiedades(token):
     response = requests.get(endpoint, headers=headers)
     return response.json()
 
-@app.function_name(name="operationAutomation")
-@app.schedule(schedule="0 0 20 * * *", 
-              arg_name="myTimer",
-              run_on_startup=False) 
-def operationautomation(myTimer: func.TimerRequest) -> None:
+def main(myTimer: func.TimerRequest) -> None:
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
     if token:
