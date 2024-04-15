@@ -10,10 +10,10 @@ CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID =8172
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
 fecha_hoy = datetime.now(zona_horaria_españa)
-#+ timedelta(days=1)
-fecha_hoy = fecha_hoy 
+
+fecha_hoy = fecha_hoy + timedelta(days=1)
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
-#app = func.FunctionApp()
+#app = func.FunctionApp()x
 
 def hayReservaHoy(propertyID, token):
     try:
