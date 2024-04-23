@@ -175,7 +175,7 @@ def main(myTimer: func.TimerRequest) -> None:
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
     if token:
-         # Ejemplo de ID de propiedad
+        # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
         for propiedad in propiedades["results"]:
             propertyID=propiedad["reference_property_id"]
