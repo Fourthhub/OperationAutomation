@@ -13,7 +13,6 @@ fecha_hoy = datetime.now(zona_horaria_españa)
 
 fecha_hoy = fecha_hoy + timedelta(days=1)
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
-#app = func.FunctionApp()x
 
 def hayReservaHoy(propertyID, token):
     try:
