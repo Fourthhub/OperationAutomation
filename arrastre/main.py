@@ -1,5 +1,6 @@
 import requests
 import json
+import logging
 import azure.functions as func
 from datetime import datetime, timezone,timedelta
 from zoneinfo import ZoneInfo
@@ -173,6 +174,7 @@ def conseguirPropiedades(token):
 def main(myTimer: func.TimerRequest) -> None:
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
+    logging.info("comenzando ejecuccion")
     if token:
         # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
