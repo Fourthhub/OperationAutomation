@@ -12,7 +12,7 @@ COMPANY_ID =8172
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
 fecha_hoy = datetime.now(zona_horaria_españa)
 
-fecha_hoy = fecha_hoy + timedelta(days=1)
+fecha_hoy = fecha_hoy + timedelta(days=0)
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
 
 def hayReservaHoy(propertyID, token):
@@ -43,7 +43,7 @@ def hayReservaHoy(propertyID, token):
 
 
 def moverAHoy(task_id, token):
-    
+    logging.info(f"Moviendo tarea {task_id}")
     try:
         endpoint = URL + f"public/inventory/v1/task/{task_id}"
         headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
@@ -176,8 +176,10 @@ def main(myTimer: func.TimerRequest) -> None:
     updates_log = []  # Para almacenar los logs de las actualizaciones
     logging.info("comenzando ejecuccion")
     if token:
+        logging.info("Token obtenido con éxito")
         # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
+        logging.info(f"Propiedades obtenidas: {len(propiedades['results'])} encontradas")
         for propiedad in propiedades["results"]:
             propertyID=propiedad["reference_property_id"]
             if propertyID==None or propiedad["status"]!="active":
