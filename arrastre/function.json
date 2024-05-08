@@ -7,5 +7,7 @@
         "direction": "in",
         "schedule": "0 0 20 * * *"
       }
-    ]
+    ],
+    "functionTimeout": "00:10:00"
+  
   }
