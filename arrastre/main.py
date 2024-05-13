@@ -107,11 +107,13 @@ def corregirPrioridades(propertyID, token):
 def moverLimpiezasConSusIncidencias(propertyID, token):
     def espasado(fechaTarea):
         if fechaTarea is None:
-            return True  
+            return True
         fecha_hoy1 = datetime.strptime(fecha_hoy, "%Y-%m-%d")
         fecha_a_comparar = datetime.strptime(fechaTarea, "%Y-%m-%d")
         return fecha_a_comparar < fecha_hoy1
+
     try:
+        fecha_hoy = datetime.now().strftime("%Y-%m-%d")
         year = datetime.now().year
         start_date = f"{year}-01-01"
         endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}"
@@ -120,28 +122,33 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
             'Authorization': f'JWT {token}'
         }
 
+        logging.info(f"Realizando solicitud GET a {endpoint}")
         response = requests.get(endpoint, headers=headers)
         
-        # Verificar si la respuesta HTTP es exitosa
-        if response.status_code in [200,201,202,204]:
+        if response.status_code in [200, 201, 202]:
             respuesta_log = []
             tasks = response.json()["results"]
+            logging.info(f"Tareas obtenidas para la propiedad {propertyID}: {len(tasks)} encontradas")
+            
             for task in tasks:
-                respuesta_log.append(task["name"])
                 estado = task["type_task_status"]["name"]
+                logging.info(f"Procesando tarea {task['name']} con estado {estado}")
+
                 if estado not in ["Finished", "Closed"]:
                     if espasado(task["scheduled_date"]):
-                        respuesta_log.append(moverAHoy(task["id"], token))
+                        logging.info(f"Tarea pasada {task['name']} será movida a hoy")
+                        resultado_movimiento = moverAHoy(task["id"], token)
+                        respuesta_log.append(task["name"] + ": " + str(resultado_movimiento))
             return respuesta_log
         else:
-            # Levantar una excepción si la respuesta de la API no es exitosa
             raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
-            
+
     except requests.exceptions.RequestException as e:
-        # Capturar errores específicos de las solicitudes y levantar una excepción
+        logging.error(f"Error de red al realizar la solicitud: {e}")
         raise Exception(f"Error de solicitud al consultar tareas para mover: {e}")
+
     except Exception as e:
-        # Levantar cualquier otra excepción que ocurra durante el proceso
+        logging.error(f"Error general en moverLimpiezasConSusIncidencias: {e}")
         raise Exception(f"Excepción al mover limpiezas e incidencias: {e}")
 
             
@@ -172,21 +179,33 @@ def conseguirPropiedades(token):
     return response.json()
 
 def main(myTimer: func.TimerRequest) -> None:
+    logging.info("Iniciando la función principal")
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
-    logging.info("comenzando ejecuccion")
+    logging.info("Comenzando ejecución")
+
     if token:
         logging.info("Token obtenido con éxito")
-        # Ejemplo de ID de propiedad
         propiedades = conseguirPropiedades(token)
         logging.info(f"Propiedades obtenidas: {len(propiedades['results'])} encontradas")
+
         for propiedad in propiedades["results"]:
-            propertyID=propiedad["reference_property_id"]
-            if propertyID==None or propiedad["status"]!="active":
+            propertyID = propiedad["reference_property_id"]
+            logging.info("Comprobando alojamiento")
+            if propertyID is None or propiedad["status"] != "active":
+                logging.info(f"Propiedad omitida (ID: {propertyID}, Estado: {propiedad['status']})")
                 continue
-            updates_log.append(propiedad["name"] + ":" + str(moverLimpiezasConSusIncidencias(propertyID, token)))
-            if hayReservaHoy(propertyID, token):              
-                updates_log.append(propiedad["name"] + ":" + str(corregirPrioridades(propertyID, token)))
+
+            logging.info(f"Procesando propiedad: {propiedad['name']} (ID: {propertyID})")
+            resultado_movimiento = moverLimpiezasConSusIncidencias(propertyID, token)
+            updates_log.append(propiedad["name"] + ":" + str(resultado_movimiento))
+            logging.info(f"Resultado del movimiento de limpiezas e incidencias: {resultado_movimiento}")
+
+            if hayReservaHoy(propertyID, token):
+                resultado_prioridades = corregirPrioridades(propertyID, token)
+                updates_log.append(propiedad["name"] + ":" + str(resultado_prioridades))
+                logging.info(f"Resultado de corrección de prioridades: {resultado_prioridades}")
 
     else:
+        logging.error("Error al acceder a breezeway")
         raise BaseException("Error al acceder a breezeway")
