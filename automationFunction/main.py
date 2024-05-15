@@ -4,7 +4,7 @@ import logging
 import azure.functions as func
 from datetime import datetime, timezone,timedelta
 from zoneinfo import ZoneInfo
-
+ 
 URL = "https://api.breezeway.io/"
 CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
