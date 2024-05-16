@@ -50,7 +50,7 @@ def moverAHoy(task_id, token):
         payload = {"scheduled_date": fecha_hoy}
         
         response = requests.patch(endpoint, json=payload, headers=headers)
-        
+        logging.info(f"respuesto movendo: {response.text}  {response.status_code}")
         if response.status_code in [200,201,202,204]:
             return f"Tarea {task_id} movida a {fecha_hoy}. Con respuesta {response.status_code} "
         else:
