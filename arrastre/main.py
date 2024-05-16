@@ -12,7 +12,7 @@ COMPANY_ID =8172
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
 fecha_hoy = datetime.now(zona_horaria_españa)
 
-fecha_hoy = fecha_hoy + timedelta(days=1) 
+#fecha_hoy = fecha_hoy + timedelta(days=1) 
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
 
 def hayReservaHoy(propertyID, token):
@@ -52,7 +52,7 @@ def moverAHoy(task_id, token):
         response = requests.patch(endpoint, json=payload, headers=headers)
         
         if response.status_code in [200,201,202,204]:
-            return f"Tarea {task_id} movida a {fecha_hoy}."
+            return f"Tarea {task_id} movida a {fecha_hoy}. Con respuesta {response.status_code} "
         else:
             return f"Error moviendo tarea {task_id} a hoy: {response.status_code} {response.text}"
     except Exception as e:
@@ -182,7 +182,7 @@ def main(myTimer: func.TimerRequest) -> None:
     logging.info("Iniciando la función principal")
     token = conexionBreezeway()
     updates_log = []  # Para almacenar los logs de las actualizaciones
-    logging.info("Comenzando ejecución")
+    logging.info(f"Comenzando ejecución a dia {fecha_hoy}")
 
     if token:
         logging.info("Token obtenido con éxito")
