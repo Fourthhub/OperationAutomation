@@ -139,7 +139,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
                         resultado_movimiento = moverAHoy(task["id"], token)
                         respuesta_log.append(task["name"] + ": " + str(resultado_movimiento))
                     else:
-                        logging.info(f"no esta atrasada, hoy es {fecha_hoy} y la fecha de la tarea es: {task["scheduled_date"]}" )
+                        fechaTarea = task["scheduled_date"]
+                        logging.info(f"no esta atrasada, hoy es {fecha_hoy} y la fecha de la tarea es: {fechaTarea}" )
             return respuesta_log
         else:
             raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
