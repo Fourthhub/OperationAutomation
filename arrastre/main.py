@@ -12,7 +12,7 @@ COMPANY_ID =8172
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
 fecha_hoy = datetime.now(zona_horaria_españa)
 
-#fecha_hoy = fecha_hoy + timedelta(days=1) 
+fecha_hoy = fecha_hoy + timedelta(days=1) 
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
 
 def hayReservaHoy(propertyID, token):
