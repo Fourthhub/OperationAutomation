@@ -108,9 +108,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
     def espasado(fechaTarea):
         if fechaTarea is None:
             return True
-        fecha_hoy1 = datetime.strptime(fecha_hoy, "%Y-%m-%d")
         fecha_a_comparar = datetime.strptime(fechaTarea, "%Y-%m-%d")
-        return fecha_a_comparar < fecha_hoy1
+        return fecha_a_comparar < fecha_hoy
 
     try:
         fecha_hoy = datetime.now().strftime("%Y-%m-%d")
@@ -139,6 +138,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
                         logging.info(f"Tarea pasada {task['name']} será movida a hoy")
                         resultado_movimiento = moverAHoy(task["id"], token)
                         respuesta_log.append(task["name"] + ": " + str(resultado_movimiento))
+                    else:
+                        logging.info(f"no esta atrasada, hoy es {fecha_hoy} y la fecha de la tarea es: {task["scheduled_date"]}" )
             return respuesta_log
         else:
             raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
