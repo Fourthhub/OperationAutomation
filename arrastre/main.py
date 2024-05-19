@@ -11,8 +11,11 @@ CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID =8172
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
 fecha_hoy = datetime.now(zona_horaria_españa)
+logging.info(f"Comenzando ejecucion a fecha {fecha_hoy}")
 
 fecha_hoy = fecha_hoy + timedelta(days=1) 
+logging.info(f"Planificando para {fecha_hoy}")
+
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
 
 def hayReservaHoy(propertyID, token):
@@ -113,7 +116,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
         return fecha_a_comparar < fecha_hoy1
 
     try:
-        
+
         year = datetime.now().year
         start_date = f"{year}-01-01"
         endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}"
