@@ -8,6 +8,6 @@
         "schedule": "0 0 20 * * *"
       }
     ],
-    "functionTimeout": "00:15:00"
+    "functionTimeout": "00:10:00"
   
   }
