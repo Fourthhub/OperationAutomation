@@ -14,8 +14,13 @@ fecha_hoy = datetime.now(zona_horaria_españa)
 logging.info(f"Comenzando ejecucion a fecha {fecha_hoy}")
 fecha_hoy = fecha_hoy + timedelta(days=1) 
 logging.info(f"planificando para {fecha_hoy}")
+logging.disable(logging.info)
 
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
+
+#LOGS INFO DESHABILITADOS
+logging.basicConfig(level=logging.WARNING)
+
 
 def hayReservaHoy(propertyID, token):
     try:
