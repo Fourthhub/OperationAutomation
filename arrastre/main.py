@@ -11,12 +11,19 @@ CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID = 8172
 
+# Configura la zona horaria de España
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
-fecha_hoy = datetime.now(zona_horaria_españa)
+
+# Obtiene la fecha y hora actuales en UTC
+fecha_hoy_utc = datetime.now(datetime.timezone.utc)
+
+# Convierte la fecha y hora actuales a la zona horaria de España
+fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
 logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
+
+# Incrementa la fecha actual en un día
 fecha_hoy = fecha_hoy + timedelta(days=1)
-logging.info(f"planificando para {fecha_hoy}")
-fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
+logging.info(f"Planificando para {fecha_hoy}")
 
 #logging.basicConfig(level=logging.WARNING)
 
