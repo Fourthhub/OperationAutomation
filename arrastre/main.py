@@ -15,7 +15,7 @@ COMPANY_ID = 8172
 zona_horaria_españa = ZoneInfo("Europe/Madrid")
 
 # Obtiene la fecha y hora actuales en UTC
-fecha_hoy_utc = datetime.now(datetime.timezone.utc)
+fecha_hoy_utc = datetime.now(timezone.utc)
 
 # Convierte la fecha y hora actuales a la zona horaria de España
 fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
