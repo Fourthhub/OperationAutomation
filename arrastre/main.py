@@ -22,7 +22,7 @@ fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
 logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
 
 # Incrementa la fecha actual en un día
-#fecha_hoy = fecha_hoy + timedelta(days=1)
+fecha_hoy = fecha_hoy + timedelta(days=1)
 logging.info(f"Planificando para {fecha_hoy}")
 
 fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
