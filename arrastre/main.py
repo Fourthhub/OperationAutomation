@@ -25,6 +25,8 @@ logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
 #fecha_hoy = fecha_hoy + timedelta(days=1)
 logging.info(f"Planificando para {fecha_hoy}")
 
+fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
+
 #logging.basicConfig(level=logging.WARNING)
 
 def hayReservaHoy(propertyID, token):
