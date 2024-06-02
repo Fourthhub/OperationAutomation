@@ -10,22 +10,26 @@ URL = "https://api.breezeway.io/"
 CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID = 8172
-
+fecha_hoy = ""
 # Configura la zona horaria de España
-zona_horaria_españa = ZoneInfo("Europe/Madrid")
+def fecha():
 
-# Obtiene la fecha y hora actuales en UTC
-fecha_hoy_utc = datetime.now(timezone.utc)
+    zona_horaria_españa = ZoneInfo("Europe/Madrid")
 
-# Convierte la fecha y hora actuales a la zona horaria de España
-fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
-logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
+    # Obtiene la fecha y hora actuales en UTC
+    fecha_hoy_utc = datetime.now(timezone.utc)
 
-# Incrementa la fecha actual en un día
-fecha_hoy = fecha_hoy + timedelta(days=1)
-logging.info(f"Planificando para {fecha_hoy}")
+    # Convierte la fecha y hora actuales a la zona horaria de España
+    fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
+    logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
 
-fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
+    # Incrementa la fecha actual en un día
+    fecha_hoy = fecha_hoy + timedelta(days=1)
+    logging.info(f"Planificando para {fecha_hoy}")
+
+    fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
+
+    return fecha_hoy
 
 #logging.basicConfig(level=logging.WARNING)
 
@@ -142,7 +146,8 @@ def main(myTimer: func.TimerRequest) -> None:
     logging.info("Iniciando la función principal")
     token = conexionBreezeway()
     updates_log = []  
-    logging.info(f"Comenzando ejecución a día {fecha_hoy}")
+    fecha_hoy = fecha()
+    
 
     if token:
         logging.info("Token obtenido con éxito")
