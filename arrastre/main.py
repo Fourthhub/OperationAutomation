@@ -34,6 +34,7 @@ def fecha():
 #logging.basicConfig(level=logging.WARNING)
 
 def hayReservaHoy(propertyID, token):
+    fecha_hoy = fecha()
     endpoint = URL + f"public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
     headers = {
         'Content-Type': 'application/json',
@@ -51,6 +52,7 @@ def hayReservaHoy(propertyID, token):
 
 
 def moverAHoy(task_id, token):
+    fecha_hoy = fecha()
     logging.info(f"Moviendo tarea {task_id}")
     endpoint = URL + f"public/inventory/v1/task/{task_id}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
@@ -63,6 +65,7 @@ def moverAHoy(task_id, token):
         return f"Error moviendo tarea {task_id} a hoy: {response.status_code} {response.text}"
 
 def ponerEnHigh(task_id, token):
+    fecha_hoy = fecha()
     endpoint = URL + f"public/inventory/v1/task/{task_id}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     payload = {"type_priority": "high"}
@@ -73,6 +76,7 @@ def ponerEnHigh(task_id, token):
         return f"Error actualizando tarea {task_id} a prioridad alta: {response.status_code} {response.text}"
 
 def corregirPrioridades(propertyID, token):
+    fecha_hoy = fecha()
     respuesta_log = []
     endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
     headers = {
@@ -91,6 +95,7 @@ def corregirPrioridades(propertyID, token):
         raise Exception(f"Error al consultar tareas: {response.status_code} - {response.text}")
 
 def moverLimpiezasConSusIncidencias(propertyID, token):
+    fecha_hoy = fecha()
     def espasado(fechaTarea):
         if fechaTarea is None:
             return True
