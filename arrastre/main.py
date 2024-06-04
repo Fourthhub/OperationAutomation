@@ -49,6 +49,7 @@ def hayReservaHoy(propertyID, token):
     else:
         raise Exception(f"Error al consultar reservas: {response.status_code} - {response.text}")
 
+
 def moverAHoy(task_id, token):
     logging.info(f"Moviendo tarea {task_id}")
     endpoint = URL + f"public/inventory/v1/task/{task_id}"
