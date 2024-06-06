@@ -21,11 +21,11 @@ def fecha():
 
     # Convierte la fecha y hora actuales a la zona horaria de España
     fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
-    logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
+    #logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
 
     # Incrementa la fecha actual en un día
     fecha_hoy = fecha_hoy + timedelta(days=1)
-    logging.info(f"Planificando para {fecha_hoy}")
+    #logging.info(f"Planificando para {fecha_hoy}")
 
     fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
 
@@ -53,7 +53,7 @@ def hayReservaHoy(propertyID, token):
 
 def moverAHoy(task_id, token):
     fecha_hoy = fecha()
-    logging.info(f"Moviendo tarea {task_id}")
+    #logging.info(f"Moviendo tarea {task_id}")
     endpoint = URL + f"public/inventory/v1/task/{task_id}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     payload = {"scheduled_date": fecha_hoy}
@@ -174,7 +174,7 @@ def main(myTimer: func.TimerRequest) -> None:
 
             for future in as_completed(futures):
                 updates_log.append(f"{futures[future]}: {future.result()}")
-                logging.info(f"Resultado: {future.result()}")
+                #logging.info(f"Resultado: {future.result()}")
 
     else:
         logging.error("Error al acceder a breezeway")
