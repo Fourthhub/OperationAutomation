@@ -63,6 +63,7 @@ def haySalidahoy(propertyID, token):
         return False
     else:
         raise Exception(f"Error al consultar reservas: {response.status_code} - {response.text}")
+
 def revisarPerro(idReserva,propertyID,token):
     url= f"https://api.hostaway.com/v1/financeField/{idReserva}"
     headers = {
@@ -140,7 +141,7 @@ def main(myTimer: func.TimerRequest) -> None:
                 if propertyID is None or propiedad["status"] != "active":
                     continue
 
-                revisarPerro(propiedad)
+                haySalidahoy(propertyID)
 
             for future in as_completed(futures):
                 updates_log.append(f"{futures[future]}: {future.result()}")
