@@ -80,7 +80,7 @@ def revisarPerro(idReserva,propertyID,token):
             return True
     return False
 
-def marcarPerro(propertyID, token):
+def marcarPerro(propertyID,token):
     taskID = 'preee'
     endpoint = URL + f"/public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
     
@@ -103,15 +103,15 @@ def cambiarNombreTarea(taskId,nombreTarea,token):
     fecha_hoy = fecha()
     nombreConPerro = "🐶" + nombreTarea 
     #logging.info(f"Moviendo tarea {task_id}")
-    endpoint = URL + f"public/inventory/v1/task/{task_id}"
+    endpoint = URL + f"public/inventory/v1/task/{taskId}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     payload = {"name": nombreConPerro}
     response = requests.patch(endpoint, json=payload, headers=headers)
     logging.info(f"Respuesta cambiando nombre: {response.text} {response.status_code}")
     if response.status_code in [200, 201, 202, 204]:
-        return f"Tarea {task_id} cambiada nombre. {response.status_code}"
+        return f"Tarea {taskId} cambiada nombre. {response.status_code}"
     else:
-        return f"Error cambiando nombre de {task_id}: {response.status_code} {response.text}"
+        return f"Error cambiando nombre de {taskId}: {response.status_code} {response.text}"
     
 def conseguirPropiedades(token):
     endpoint = URL + f"public/inventory/v1/property?company_id={COMPANY_ID}&limit=350"
