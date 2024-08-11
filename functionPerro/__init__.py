@@ -124,29 +124,38 @@ def conseguirPropiedades(token):
 
 def main(myTimer: func.TimerRequest) -> None:
     logging.info("Iniciando la función principal")
-    token = conexionBreezeway()
-    updates_log = []  
-    fecha_hoy = fecha()
     
+    # Obtener el token de autenticación
+    token = conexionBreezeway()
+    updates_log = []
+    fecha_hoy = fecha()
 
+    # Verificar si se obtuvo el token correctamente
     if token:
         logging.info("Token obtenido con éxito")
+        
+        # Obtener las propiedades
         propiedades = conseguirPropiedades(token)
         logging.info(f"Propiedades obtenidas: {len(propiedades['results'])} encontradas")
-
-        with ThreadPoolExecutor() as executor:
-            futures = {}
-            for propiedad in propiedades["results"]:
-                propertyID = propiedad["reference_property_id"]
-                if propertyID is None or propiedad["status"] != "active":
-                    continue
-
-                haySalidahoy(propertyID)
-
-            for future in as_completed(futures):
-                updates_log.append(f"{futures[future]}: {future.result()}")
-                #logging.info(f"Resultado: {future.result()}")
+        
+        # Procesar cada propiedad secuencialmente
+        for propiedad in propiedades["results"]:
+            propertyID = propiedad["reference_property_id"]
+            
+            # Verificar que la propiedad sea activa
+            if propertyID is None or propiedad["status"] != "active":
+                continue
+            
+            # Comprobar si hay salida hoy
+            try:
+                if haySalidahoy(propertyID, token):
+                    logging.info(f"Salida encontrada para la propiedad {propertyID}")
+                else:
+                    logging.info(f"No hay salida hoy para la propiedad {propertyID}")
+            except Exception as e:
+                logging.error(f"Error procesando propiedad {propertyID}: {str(e)}")
+                updates_log.append(f"Error en {propertyID}: {str(e)}")
 
     else:
-        logging.error("Error al acceder a breezeway")
-        raise BaseException("Error al acceder a breezeway")
+        logging.error("Error al acceder a Breezeway")
+        raise BaseException("Error al acceder a Breezeway")
