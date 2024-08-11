@@ -4,16 +4,16 @@ import logging
 import azure.functions as func
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 URL = "https://api.breezeway.io/"
 CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID = 8172
 fecha_hoy = ""
+
 # Configura la zona horaria de España
 def fecha():
-
+    global fecha_hoy
     zona_horaria_españa = ZoneInfo("Europe/Madrid")
 
     # Obtiene la fecha y hora actuales en UTC
@@ -21,17 +21,15 @@ def fecha():
 
     # Convierte la fecha y hora actuales a la zona horaria de España
     fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
-    #logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
+    # logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
 
     # Incrementa la fecha actual en un día
     fecha_hoy = fecha_hoy + timedelta(days=1)
-    #logging.info(f"Planificando para {fecha_hoy}")
+    # logging.info(f"Planificando para {fecha_hoy}")
 
     fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
 
     return fecha_hoy
-
-#logging.basicConfig(level=logging.WARNING)
 
 def conexionBreezeway():
     endpoint = URL + "public/auth/v1/"
@@ -51,23 +49,23 @@ def haySalidahoy(propertyID, token):
     endpoint = URL + f"public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'JWT {token}'
+        'Authorization': f'JWT {token}'  # Asegúrate de que este es el tipo de token correcto
     }
     response = requests.get(endpoint, headers=headers)
     if response.status_code in [200, 201, 202, 204]:
         reservas = response.json()
         for reserva in reservas:
             if reserva["checkout_date"] == fecha_hoy:
-                revisarPerro(reserva["reference_reservation_id"],propertyID,token)
+                revisarPerro(reserva["reference_reservation_id"], propertyID, token)
                 return True
         return False
     else:
         raise Exception(f"Error al consultar reservas: {response.status_code} - {response.text}")
 
-def revisarPerro(idReserva,propertyID,token):
-    url= f"https://api.hostaway.com/v1/financeField/{idReserva}"
+def revisarPerro(idReserva, propertyID, token):
+    url = f"https://api.hostaway.com/v1/financeField/{idReserva}"
     headers = {
-        'Authorization': f"Bearer {token}",
+        'Authorization': f"Bearer {token}",  # Asegúrate de que este es el tipo de token correcto
         'Content-type': "application/json",
         'Cache-control': "no-cache",
     }
@@ -75,13 +73,13 @@ def revisarPerro(idReserva,propertyID,token):
     data = response.json()['result']
     
     for element in data:
-        if element['name']=="petFee":
-            marcarPerro(propertyID,token)
+        if element['name'] == "petFee":
+            marcarPerro(propertyID, token)
             return True
     return False
 
-def marcarPerro(propertyID,token):
-    taskID = 'preee'
+def marcarPerro(propertyID, token):
+    fecha_hoy = fecha()  # Asegúrate de que se actualiza
     endpoint = URL + f"/public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
     
     headers = {
@@ -89,20 +87,17 @@ def marcarPerro(propertyID,token):
         'Authorization': f'JWT {token}'
     }
     response = requests.get(endpoint, headers=headers)
-    data = response.json()['result']
+    data = response.json().get('result', [])
     for element in data:
         if element["template_id"] == 101204:
             taskID = element["id"]
             nombreTarea = element["name"]
-            cambiarNombreTarea(taskID,nombreTarea,token,)
-            
-    
+            cambiarNombreTarea(taskID, nombreTarea, token)
 
-    
-def cambiarNombreTarea(taskId,nombreTarea,token):
+def cambiarNombreTarea(taskId, nombreTarea, token):
     fecha_hoy = fecha()
     nombreConPerro = "🐶" + nombreTarea 
-    #logging.info(f"Moviendo tarea {task_id}")
+    # logging.info(f"Moviendo tarea {taskId}")
     endpoint = URL + f"public/inventory/v1/task/{taskId}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     payload = {"name": nombreConPerro}
@@ -112,7 +107,7 @@ def cambiarNombreTarea(taskId,nombreTarea,token):
         return f"Tarea {taskId} cambiada nombre. {response.status_code}"
     else:
         return f"Error cambiando nombre de {taskId}: {response.status_code} {response.text}"
-    
+
 def conseguirPropiedades(token):
     endpoint = URL + f"public/inventory/v1/property?company_id={COMPANY_ID}&limit=350"
     headers = {
