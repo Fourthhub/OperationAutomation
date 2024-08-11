@@ -1,5 +1,5 @@
 {
-    "scriptFile": "main.py",
+    "scriptFile": "perro.py",
     "bindings": [
       {
         "name": "myTimer2",
