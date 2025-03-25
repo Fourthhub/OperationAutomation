@@ -106,19 +106,23 @@ def moverLimpiezasConSusIncidencias(propertyID, token):
     year = datetime.now().year
     start_date = f"{year}-01-01"
     endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}"
+    logging.info("Endpoint" + endpoint)
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
     }
     response = requests.get(endpoint, headers=headers)
+    
     if response.status_code in [200, 201, 202]:
         respuesta_log = []
         tasks = response.json()["results"]
+        
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(moverAHoy, task["id"], token) 
                 for task in tasks 
                 if task["type_task_status"]["name"] not in ["Finished", "Closed"] and espasado(task["scheduled_date"])
+                logging.info("Tarea procesada:" + task["name"] )
             ]
             for future in as_completed(futures):
                 respuesta_log.append(future.result())
@@ -167,8 +171,8 @@ def main(myTimer: func.TimerRequest) -> None:
                 if propertyID is None or propiedad["status"] != "active":
                     continue
 
+                updates_log.append(f"Procesando Propiedad: " + propiedad["name"])
                 futures[executor.submit(moverLimpiezasConSusIncidencias, propertyID, token)] = propiedad["name"]
-                
                 if hayReservaHoy(propertyID, token):
                     futures[executor.submit(corregirPrioridades, propertyID, token)] = propiedad["name"]
 
