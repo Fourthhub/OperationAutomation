@@ -145,7 +145,7 @@ def conexionBreezeway():
 
 def conseguirPropiedades(token):
     logging.info("Obteniendo propiedades")
-    endpoint = URL + f"public/inventory/v1/property?company_id={COMPANY_ID}&limit=350"
+    endpoint = URL + f"public/inventory/v1/property?company_id={COMPANY_ID}&limit=450"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
