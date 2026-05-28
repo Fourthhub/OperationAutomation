@@ -15,9 +15,8 @@ def fecha():
     zona_horaria_españa = ZoneInfo("Europe/Madrid")
     fecha_hoy_utc = datetime.now(timezone.utc)
     fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
-    fecha_hoy = fecha_hoy + timedelta(days=1)  
+    #fecha_hoy = fecha_hoy + timedelta(days=1)  
     fecha_hoy_str = fecha_hoy.strftime("%Y-%m-%d")
-   
     logging.info(f"Fecha planificada: {fecha_hoy_str}")
     return fecha_hoy_str
 

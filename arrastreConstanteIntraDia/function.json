@@ -1,0 +1,13 @@
+{
+    "scriptFile": "__init__.py",
+    "bindings": [
+      {
+        "name": "myTimer",
+        "type": "timerTrigger",
+        "direction": "in",
+        "schedule": "0 0/30 9-16 * * *"
+      }
+    ],
+    "functionTimeout": "00:10:00"
+  
+  }
