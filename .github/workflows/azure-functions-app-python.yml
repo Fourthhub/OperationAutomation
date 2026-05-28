@@ -13,21 +13,30 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: dev
+
     steps:
       - name: 'Checkout GitHub Action'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4                        # ✅ v3 → v4
 
       - name: Setup Python ${{ env.PYTHON_VERSION }} Environment
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Cache pip dependencies                     # ✅ nuevo: caché de dependencias
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: 'Resolve Project Dependencies Using Pip'
         shell: bash
         run: |
           pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
           python -m pip install --upgrade pip
-          pip install -r requirements.txt --target=".python_packages/lib/site-packages"
+          pip install -r requirements.txt               # ✅ eliminado --target: evita conflicto con oryx
           popd
 
       - name: 'Run Azure Functions Action'
@@ -37,5 +46,5 @@ jobs:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
-          scm-do-build-during-deployment: false  # dependencias ya instaladas arriba
-          enable-oryx-build: false               # no rebuildar en Azure
+          scm-do-build-during-deployment: true
+          enable-oryx-build: true
