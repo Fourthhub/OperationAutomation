@@ -18,6 +18,19 @@ jobs:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
 
+      - name: 'Remove SCM_RUN_FROM_PACKAGE'       # ✅ elimina el bloqueo
+        shell: bash
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+        run: |
+          USER=$(echo $PUBLISH_PROFILE | grep -oP '(?<=userName=")[^"]+')
+          PASS=$(echo $PUBLISH_PROFILE | grep -oP '(?<=userPWD=")[^"]+')
+          curl -s -X DELETE \
+            -u "$USER:$PASS" \
+            -H "Content-Type: application/json" \
+            https://breezeac.scm.azurewebsites.net/api/settings/SCM_RUN_FROM_PACKAGE
+          echo "SCM_RUN_FROM_PACKAGE eliminado"
+
       - name: Setup Python ${{ env.PYTHON_VERSION }} Environment
         uses: actions/setup-python@v5
         with:
@@ -36,7 +49,7 @@ jobs:
         run: |
           pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
           python -m pip install --upgrade pip
-          pip install -r requirements.txt   # ✅ sin --target, Oryx lo gestiona
+          pip install -r requirements.txt
           popd
 
       - name: 'Run Azure Functions Action'
@@ -46,5 +59,5 @@ jobs:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
-          scm-do-build-during-deployment: true   # ✅ activado para Consumption Linux
-          enable-oryx-build: true                # ✅ activado con versión ya correcta en Azure
+          scm-do-build-during-deployment: true
+          enable-oryx-build: true
