@@ -15,10 +15,18 @@ def fecha():
     zona_horaria_españa = ZoneInfo("Europe/Madrid")
     fecha_hoy_utc = datetime.now(timezone.utc)
     fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
-    fecha_hoy = fecha_hoy + timedelta(days=1)
+    #fecha_hoy = fecha_hoy + timedelta(days=1)
     fecha_hoy_str = fecha_hoy.strftime("%Y-%m-%d")
     logging.info(f"Fecha planificada: {fecha_hoy_str}")
     return fecha_hoy_str
+
+def espasado(fechaTarea):
+    fecha_hoy = fecha()
+    if fechaTarea is None:
+        return True
+    fecha_hoy_dt = datetime.strptime(fecha_hoy, "%Y-%m-%d")
+    fecha_tarea_dt = datetime.strptime(fechaTarea, "%Y-%m-%d")
+    return fecha_tarea_dt < fecha_hoy_dt
 
 def hayReservaHoy(propertyID, token):
     fecha_hoy = fecha()
@@ -75,51 +83,57 @@ def corregirPrioridades(propertyID, token, property_name):
     response = requests.get(endpoint, headers=headers)
     if response.status_code in [200, 201, 202, 204]:
         tasks = response.json()["results"]
+        tareas_a_actualizar = [
+            task for task in tasks
+            if task["type_task_status"]["name"] not in ["Finished", "Closed"]
+        ]
+
+        if not tareas_a_actualizar:
+            logging.info(f"Propiedad {property_name}: Sin tareas pendientes que actualizar a prioridad alta.")
+            return []
+
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(ponerEnHigh, task["id"], token)
-                for task in tasks 
-                if task["type_task_status"]["name"] not in ["Finished", "Closed"]
-                   and (logging.info(f"Propiedad {property_name}: Actualizando prioridad para tarea {task.get('name', 'Sin nombre')}") or True)
+                for task in tareas_a_actualizar
             ]
             for future in as_completed(futures):
                 respuesta_log.append(future.result())
+                logging.info(f"Propiedad {property_name}: {future.result()}")
         return respuesta_log
     else:
         raise Exception(f"Error al consultar tareas: {response.status_code} - {response.text}")
 
 def moverLimpiezasConSusIncidencias(propertyID, token, property_name):
     fecha_hoy = fecha()
-    logging.info(f"Propiedad {property_name} (ID: {propertyID}): Iniciando mover limpiezas con incidencias para tareas creadas desde {datetime.now().year}-01-01 hasta {fecha_hoy}")
-    
-    def espasado(fechaTarea):
-        if fechaTarea is None:
-            return True
-        fecha_hoy_dt = datetime.strptime(fecha_hoy, "%Y-%m-%d")
-        fecha_tarea_dt = datetime.strptime(fechaTarea, "%Y-%m-%d")
-        return fecha_tarea_dt < fecha_hoy_dt
-
     year = datetime.now().year
     start_date = f"{year}-01-01"
+    logging.info(f"Propiedad {property_name}: Buscando tareas pendientes desde {start_date} hasta {fecha_hoy}")
     endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}"
-    logging.info(f"Propiedad {property_name}: Endpoint para tareas: {endpoint}")
-    
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
     }
     response = requests.get(endpoint, headers=headers)
-    
+
     if response.status_code in [200, 201, 202]:
         respuesta_log = []
         tasks = response.json()["results"]
+        tareas_a_mover = [
+            task for task in tasks
+            if task["type_task_status"]["name"] not in ["Finished", "Closed"]
+               and espasado(task["scheduled_date"])
+        ]
+
+        if not tareas_a_mover:
+            logging.info(f"Propiedad {property_name}: Sin tareas atrasadas que mover.")
+            return []
+
+        logging.info(f"Propiedad {property_name}: {len(tareas_a_mover)} tarea(s) atrasada(s) encontradas, moviendo a {fecha_hoy}")
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(moverAHoy, task["id"], token, property_name)
-                for task in tasks 
-                if task["type_task_status"]["name"] not in ["Finished", "Closed"] 
-                   and espasado(task["scheduled_date"])
-                   and (logging.info(f"Propiedad {property_name}: Procesando tarea '{task.get('name', 'Sin nombre')}' (ID: {task['id']})") or True)
+                for task in tareas_a_mover
             ]
             for future in as_completed(futures):
                 respuesta_log.append(future.result())
@@ -156,34 +170,42 @@ def conseguirPropiedades(token):
 def main(myTimer: func.TimerRequest) -> None:
     logging.info("Iniciando la función principal")
     token = conexionBreezeway()
-    updates_log = []  
+    updates_log = []
     fecha_hoy = fecha()
-    
+
     if token:
         propiedades = conseguirPropiedades(token)
         logging.info(f"Propiedades obtenidas: {len(propiedades.get('results', []))} encontradas")
+
         with ThreadPoolExecutor() as executor:
             futures = {}
             for propiedad in propiedades["results"]:
                 propertyID = propiedad["reference_property_id"]
                 property_name = propiedad["name"]
+
                 if propertyID is None or propiedad["status"] != "active":
-                    logging.info(f"Propiedad {property_name} omitida (ID nulo o inactiva)")
+                    logging.info(f"Propiedad {property_name}: Omitida (ID nulo o inactiva)")
                     continue
 
-                logging.info(f"Iniciando procesamiento de propiedad: {property_name} (ID: {propertyID})")
-                updates_log.append(f"Procesando Propiedad: {property_name}")
-                # Enviar tareas de mover limpiezas
+                logging.info(f"Propiedad {property_name}: Iniciando procesamiento")
                 futures[executor.submit(moverLimpiezasConSusIncidencias, propertyID, token, property_name)] = property_name
-                # Enviar tareas de corregir prioridades si hay reserva hoy
+
                 if hayReservaHoy(propertyID, token):
+                    logging.info(f"Propiedad {property_name}: Reserva detectada mañana, corrigiendo prioridades.")
                     futures[executor.submit(corregirPrioridades, propertyID, token, property_name)] = property_name
+                else:
+                    logging.info(f"Propiedad {property_name}: Sin reserva mañana, no se corrigen prioridades.")
 
             for future in as_completed(futures):
-                result = future.result()
                 prop_name = futures[future]
-                updates_log.append(f"{prop_name}: {result}")
-                logging.info(f"Resultado para propiedad {prop_name}: {result}")
+                try:
+                    result = future.result()
+                    updates_log.append(f"{prop_name}: {result}")
+                    logging.info(f"Propiedad {prop_name}: Procesamiento completado. Resultado: {result}")
+                except Exception as e:
+                    logging.error(f"Propiedad {prop_name}: Error durante el procesamiento: {e}")
+
+        logging.info("Función principal completada.")
     else:
         logging.error("Error al acceder a Breezeway")
         raise BaseException("Error al acceder a Breezeway")
