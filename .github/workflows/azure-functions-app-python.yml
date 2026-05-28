@@ -8,6 +8,8 @@ env:
   AZURE_FUNCTIONAPP_NAME: 'breezeAc'
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'
   PYTHON_VERSION: '3.11'
+  ACTIONS_RUNNER_DEBUG: true        # ✅ logs detallados del runner
+  ACTIONS_STEP_DEBUG: true 
 
 jobs:
   build-and-deploy:
