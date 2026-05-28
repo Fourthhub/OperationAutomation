@@ -1,63 +1,27 @@
-name: Deploy Python project to Azure Function App
-
-on:
-  push:
-    branches: ["main"]
-
-env:
-  AZURE_FUNCTIONAPP_NAME: 'breezeAc'
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'
-  PYTHON_VERSION: '3.11'
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    environment: dev
-
-    steps:
-      - name: 'Checkout GitHub Action'
-        uses: actions/checkout@v4
-
-      - name: 'Remove SCM_RUN_FROM_PACKAGE'       # ✅ elimina el bloqueo
+- name: 'Remove SCM_RUN_FROM_PACKAGE y forzar Python 3.11'
         shell: bash
         env:
           PUBLISH_PROFILE: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
         run: |
           USER=$(echo $PUBLISH_PROFILE | grep -oP '(?<=userName=")[^"]+')
           PASS=$(echo $PUBLISH_PROFILE | grep -oP '(?<=userPWD=")[^"]+')
+
+          # Eliminar SCM_RUN_FROM_PACKAGE
           curl -s -X DELETE \
             -u "$USER:$PASS" \
-            -H "Content-Type: application/json" \
             https://breezeac.scm.azurewebsites.net/api/settings/SCM_RUN_FROM_PACKAGE
-          echo "SCM_RUN_FROM_PACKAGE eliminado"
 
-      - name: Setup Python ${{ env.PYTHON_VERSION }} Environment
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          # Forzar versión de Python para Oryx
+          curl -s -X POST \
+            -u "$USER:$PASS" \
+            -H "Content-Type: application/json" \
+            -d '{"ORYX_PYTHON_PLATFORM_VERSION":"3.11"}' \
+            https://breezeac.scm.azurewebsites.net/api/settings
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          echo "Settings actualizados en breezeAc"
 
-      - name: 'Resolve Project Dependencies Using Pip'
-        shell: bash
-        run: |
-          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          popd
-
-      - name: 'Run Azure Functions Action'
-        uses: Azure/functions-action@v1
-        id: fa
-        with:
-          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
-          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
-          scm-do-build-during-deployment: true
-          enable-oryx-build: true
+          # Verificar que quedaron bien
+          echo "=== Settings actuales ==="
+          curl -s -u "$USER:$PASS" \
+            https://breezeac.scm.azurewebsites.net/api/settings \
+            | python3 -c "import sys,json; s=json.load(sys.stdin); print('ORYX_PYTHON_PLATFORM_VERSION:', s.get('ORYX_PYTHON_PLATFORM_VERSION','NO ENCONTRADO'))"
