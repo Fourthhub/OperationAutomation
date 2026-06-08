@@ -96,7 +96,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token, property_name):
     year = datetime.now().year
     start_date = f"{year}-01-01"
     logging.info(f"Propiedad {property_name} (ID: {propertyID}): Buscando tareas desde {start_date} hasta {fecha_hoy}")
-    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}"
+    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}&sort_order=desc"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     response = requests.get(endpoint, headers=headers)
 
@@ -107,7 +107,9 @@ def moverLimpiezasConSusIncidencias(propertyID, token, property_name):
             futures = [
                 executor.submit(moverAHoy, task["id"], token, property_name)
                 for task in tasks
+                
                 if task["type_task_status"]["name"] not in ["Finished", "Closed"]
+                
                    and espasado(task["scheduled_date"])
                    and (logging.info(f"Propiedad {property_name}: Procesando tarea '{task.get('name', 'Sin nombre')}' (ID: {task['id']})") or True)
             ]
