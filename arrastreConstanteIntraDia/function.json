@@ -7,7 +7,5 @@
         "direction": "in",
         "schedule": "0 0/30 9-16 * * *"
       }
-    ],
-    "functionTimeout": "00:10:00"
-  
+    ]
   }
