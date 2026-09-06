@@ -37,6 +37,11 @@ def fecha():
 #
 # Para reactivarlo: descomentar este bloque y la llamada marcada en
 # procesarPropiedad().
+#
+# OJO al reactivarlo: hayReservaHoy consulta el endpoint reservation/external-id,
+# que va indexado por reference_property_id, o sea el id de listing de Hostaway.
+# NO se puede cambiar por home_id. Y seguira saltandose las propiedades sin ese
+# id, que es lo correcto: preguntar si una oficina tiene reserva no significa nada.
 # ============================================================================
 # def hayReservaHoy(propertyID, token):
 #     if propertyID is None:
@@ -102,7 +107,19 @@ def moverAHoy(task_id, token, property_name=""):
 #     else:
 #         raise Exception(f"Error al consultar tareas: {response.status_code} - {response.text}")
 #
-def moverLimpiezasConSusIncidencias(propertyID, token, property_name):
+def moverLimpiezasConSusIncidencias(homeID, token, property_name):
+    """Arrastra a la fecha objetivo las tareas pendientes ya vencidas.
+
+    Se consulta por home_id (la clave propia de Breezeway) y no por
+    reference_property_id (que es el id de listing de Hostaway). Mover tareas es
+    trabajo interno de Breezeway y no tiene nada que ver con las reservas, asi
+    que aplica igual a las propiedades que no existen en Hostaway: las oficinas,
+    el parking, Casa Rocio y el agregado del hotel, que no son listings porque
+    no se pueden reservar y por eso no tienen id externo. Antes se quedaban sin
+    arrastrar (15 tareas atrasadas acumuladas, una de ellas de mayo).
+
+    Comprobado sobre 12 propiedades: las dos vias devuelven las mismas tareas.
+    """
     fecha_hoy = fecha()
 
     def espasado(fechaTarea):
@@ -114,8 +131,8 @@ def moverLimpiezasConSusIncidencias(propertyID, token, property_name):
 
     year = datetime.now().year
     start_date = f"{year}-01-01"
-    logging.info(f"Propiedad {property_name} (ID: {propertyID}): Buscando tareas desde {start_date} hasta {fecha_hoy}")
-    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&created_at={start_date},{fecha_hoy}&sort_order=desc"
+    logging.info(f"Propiedad {property_name} (home_id: {homeID}): Buscando tareas desde {start_date} hasta {fecha_hoy}")
+    endpoint = URL + f"public/inventory/v1/task/?home_id={homeID}&created_at={start_date},{fecha_hoy}&sort_order=desc"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     response = requests.get(endpoint, headers=headers)
 
@@ -134,7 +151,7 @@ def moverLimpiezasConSusIncidencias(propertyID, token, property_name):
                 respuesta_log.append(future.result())
         return respuesta_log
     else:
-        raise Exception(f"Error al consultar tareas para mover {propertyID}: {response.status_code} - {response.text}")
+        raise Exception(f"Error al consultar tareas para mover {homeID}: {response.status_code} - {response.text}")
 
 def conexionBreezeway():
     logging.info("Obteniendo token de Breezeway")
@@ -167,12 +184,11 @@ def procesarPropiedad(propiedad, token):
     Los dos pasos se aislan entre si: antes eran dos futures independientes, y
     al juntarlos aqui un fallo en el primero dejaria sin ejecutar el segundo.
     """
-    propertyID = propiedad["reference_property_id"]
     property_name = propiedad["name"]
     resultado = []
 
     try:
-        resultado += moverLimpiezasConSusIncidencias(propertyID, token, property_name) or []
+        resultado += moverLimpiezasConSusIncidencias(propiedad["id"], token, property_name) or []
     except Exception as e:
         resultado.append(f"Error moviendo limpiezas: {e}")
 
@@ -195,13 +211,16 @@ def main(myTimer: func.TimerRequest) -> None:
         propiedades = conseguirPropiedades(token)
         logging.info(f"Propiedades obtenidas: {len(propiedades.get('results', []))} encontradas")
 
+        # Ya no se exige reference_property_id: se arrastra por home_id, asi que
+        # tambien entran las propiedades que no existen en Hostaway (oficinas,
+        # parking, Casa Rocio, el agregado del hotel).
         propiedades_activas = [
             p for p in propiedades["results"]
-            if p.get("reference_property_id") is not None and p.get("status") == "active"
+            if p.get("id") is not None and p.get("status") == "active"
         ]
         omitidas = len(propiedades["results"]) - len(propiedades_activas)
         if omitidas:
-            logging.info(f"{omitidas} propiedades omitidas (ID nulo o inactivas)")
+            logging.info(f"{omitidas} propiedades omitidas (inactivas o sin home_id)")
         logging.info(f"Propiedades a procesar: {len(propiedades_activas)}")
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS_PROPIEDADES) as executor:
