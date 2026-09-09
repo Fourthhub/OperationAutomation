@@ -1,20 +1,22 @@
-"""Genera el libro de Excel y lo sube a OneDrive con Microsoft Graph.
+"""Un fichero de Excel por empleado, con una hoja por mes, en OneDrive.
 
-Se sube el fichero entero en lugar de escribir celda a celda con la API de
-Excel: para un informe mensual que se regenera completo es una sola llamada en
-vez de cientos, y de paso evita el choque de nombres que sufre el escenario de
-Liquidaciones, porque el PUT reemplaza el fichero si ya existe.
+La organizacion importa: como el sueldo por hora se escribe a mano, tenerlo en
+un sitio por persona y no por mes evita volver a teclear 49 precios cada primero
+de mes. Vive en la hoja "Ficha", y las hojas de cada mes lo referencian.
+
+Por eso cada ejecucion no genera el libro de cero: descarga el que ya existe,
+le anade o reemplaza la hoja del mes y lo vuelve a subir. Asi se conserva lo que
+haya escrito una persona: el precio hora y cualquier correccion a mano.
 """
 
-import collections
 import io
 import logging
 import re
 import time
 
 import requests
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -23,33 +25,27 @@ TIMEOUT = 120
 CABECERAS = [("fecha", 12), ("entrada", 10), ("salida", 10), ("horas", 9), ("aviso", 46)]
 
 AMARILLO = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-# Azul claro para la celda que rellena una persona, para que no se confunda con
-# el amarillo, que aqui significa "este dia hay que revisarlo".
+# Azul claro para lo que rellena una persona: el amarillo ya significa
+# "este dia hay que revisarlo" y no conviene mezclar los dos sentidos.
 AZUL_EDITABLE = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
 BORDE = Border(*[Side(style="thin", color="9BC2E6")] * 4)
 
 EUROS = '#,##0.00 "€"'
-PRIMERA_FILA_DATOS = 9   # 1 titulo, 2 blanco, 3-6 bloque de sueldo, 7 blanco, 8 cabeceras
 
-# Excel no admite mas de 31 caracteres ni estos caracteres en el nombre de una hoja.
-PROHIBIDOS = re.compile(r"[:\\/?*\[\]]")
+HOJA_FICHA = "Ficha"
+FILA_SUELDO = 6            # Ficha!B6 es la unica celda que se rellena a mano
+FILA_TABLA_MESES = 9       # cabecera de la tabla de meses en la Ficha
+PRIMERA_FILA_DATOS = 8     # en la hoja de un mes: 1 titulo, 3-5 totales, 7 cabeceras
+
+PROHIBIDOS_HOJA = re.compile(r"[:\\/?*\[\]]")
+PROHIBIDOS_FICHERO = re.compile(r'[<>:"/\\|?*]')
 
 
-def nombre_de_hoja(empleado, workno, usados):
-    """Nombre de hoja valido y unico.
-
-    Se limpia lo que Excel no admite y se recorta a 31 caracteres. Si dos
-    empleados acabaran coincidiendo se anade el numero, que si es unico.
-    """
-    base = PROHIBIDOS.sub(" ", empleado or "").strip() or "Sin nombre"
-    base = " ".join(base.split())[:31]
-    if base.lower() not in usados:
-        usados.add(base.lower())
-        return base
-    sufijo = " ({})".format(workno)
-    base = base[:31 - len(sufijo)] + sufijo
-    usados.add(base.lower())
-    return base
+def nombre_de_fichero(empleado, workno):
+    """'Ana Canales - 54.xlsx'. Ordena por nombre y el numero lo hace unico."""
+    base = PROHIBIDOS_FICHERO.sub(" ", empleado or "").strip() or "Sin nombre"
+    base = " ".join(base.split())
+    return "{} - {}.xlsx".format(base[:80], workno)
 
 
 def token(tenant_id, client_id, client_secret):
@@ -67,53 +63,154 @@ def token(tenant_id, client_id, client_secret):
     return respuesta.json()["access_token"]
 
 
-def _hoja_persona(libro, titulo, filas):
-    """Una hoja con los dias de un solo empleado.
+# --- Graph -----------------------------------------------------------------
 
-    Los dias que hay que revisar a mano van en amarillo en vez de en una hoja
-    aparte, para que cada persona vea su mes completo de un vistazo.
+INTENTOS_SI_BLOQUEADO = 3
+ESPERA_SI_BLOQUEADO = 20
 
-    Arriba queda el bloque de sueldo: B3 es la unica celda que se rellena a
-    mano, y las horas y el total a pagar son formulas de Excel, no numeros
-    calculados aqui. Asi el total se recalcula solo en cuanto se escribe el
-    precio hora, y tambien si alguien corrige a mano las horas de un dia que
-    estaba en amarillo.
+
+def _cabeceras(tk, tipo=None):
+    h = {"Authorization": "Bearer {}".format(tk)}
+    if tipo:
+        h["Content-Type"] = tipo
+    return h
+
+
+def descargar(tk, drive_id, carpeta_id, nombre):
+    """Contenido del fichero, o None si todavia no existe."""
+    url = "{}/drives/{}/items/{}:/{}:/content".format(GRAPH, drive_id, carpeta_id, nombre)
+    respuesta = requests.get(url, headers=_cabeceras(tk), timeout=TIMEOUT)
+    if respuesta.status_code == 404:
+        return None
+    respuesta.raise_for_status()
+    return respuesta.content
+
+
+def subir(tk, drive_id, carpeta_id, nombre, contenido):
+    """Sube o reemplaza el fichero.
+
+    Si alguien lo tiene abierto en Excel, OneDrive lo bloquea y Graph responde
+    423 resourceLocked. Se reintenta un par de veces por si es un guardado
+    momentaneo y si sigue bloqueado se avisa de que hay que cerrarlo.
     """
-    hoja = libro.create_sheet(titulo)
-    primera = filas[0]
-    completas = [f for f in filas if f["horas"] is not None]
+    url = "{}/drives/{}/items/{}:/{}:/content".format(GRAPH, drive_id, carpeta_id, nombre)
+    tipo = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    hoja["A1"] = "{} — nº {} — {}".format(primera["empleado"], primera["workno"], primera["departamento"])
+    for intento in range(1, INTENTOS_SI_BLOQUEADO + 1):
+        respuesta = requests.put(url, headers=_cabeceras(tk, tipo), data=contenido, timeout=TIMEOUT)
+
+        if respuesta.status_code in (200, 201):
+            datos = respuesta.json()
+            logging.info("Subido %s (%s bytes)", datos.get("name"), datos.get("size"))
+            return datos.get("webUrl")
+
+        if respuesta.status_code == 423 and intento < INTENTOS_SI_BLOQUEADO:
+            logging.warning("%s bloqueado, reintento %s de %s en %s s",
+                            nombre, intento, INTENTOS_SI_BLOQUEADO, ESPERA_SI_BLOQUEADO)
+            time.sleep(ESPERA_SI_BLOQUEADO)
+            continue
+
+        if respuesta.status_code == 423:
+            raise RuntimeError(
+                "No se pudo escribir {}: alguien lo tiene abierto en Excel.".format(nombre))
+
+        raise RuntimeError("Graph rechazo la subida de {}: {} {}".format(
+            nombre, respuesta.status_code, respuesta.text[:250]))
+
+
+# --- Construccion del libro ------------------------------------------------
+
+def _ficha(libro, empleado, workno, departamento):
+    """Crea la hoja Ficha si no existe. Nunca pisa el sueldo ya escrito."""
+    if HOJA_FICHA in libro.sheetnames:
+        hoja = libro[HOJA_FICHA]
+    else:
+        hoja = libro.create_sheet(HOJA_FICHA, 0)
+        hoja["A6"] = "SUELDO POR HORA"
+        hoja["A6"].font = Font(bold=True)
+        hoja["B6"].fill = AZUL_EDITABLE
+        hoja["B6"].border = BORDE
+        hoja["B6"].number_format = EUROS
+        hoja["C6"] = "← se escribe una sola vez, vale para todos los meses"
+        hoja["C6"].font = Font(italic=True, color="808080")
+
+    hoja["A1"] = empleado
+    hoja["A1"].font = Font(bold=True, size=14)
+    hoja["A3"] = "Nº de empleado"
+    hoja["B3"] = workno
+    hoja["A4"] = "Departamento"
+    hoja["B4"] = departamento
+    hoja.column_dimensions["A"].width = 22
+    hoja.column_dimensions["B"].width = 16
+    for col in ("C", "D", "E"):
+        hoja.column_dimensions[col].width = 15
+    return hoja
+
+
+def _tabla_de_meses(hoja_ficha, libro):
+    """Rehace la tabla de meses de la Ficha a partir de las hojas que hay."""
+    for fila in range(FILA_TABLA_MESES, hoja_ficha.max_row + 2):
+        for col in range(1, 6):
+            hoja_ficha.cell(row=fila, column=col).value = None
+
+    cabeceras = ["Mes", "Horas", "Días", "A revisar", "Total a pagar"]
+    for i, c in enumerate(cabeceras, start=1):
+        celda = hoja_ficha.cell(row=FILA_TABLA_MESES, column=i, value=c)
+        celda.font = Font(bold=True)
+
+    meses = sorted(h for h in libro.sheetnames if h != HOJA_FICHA)
+    for n, mes in enumerate(meses, start=1):
+        fila = FILA_TABLA_MESES + n
+        ref = "'{}'".format(mes)
+        hoja_ficha.cell(row=fila, column=1, value=mes)
+        hoja_ficha.cell(row=fila, column=2, value="={}!$B$3".format(ref)).number_format = "0.00"
+        hoja_ficha.cell(row=fila, column=3, value="={}!$B$5".format(ref))
+        hoja_ficha.cell(row=fila, column=4, value="={}!$B$4".format(ref))
+        hoja_ficha.cell(row=fila, column=5, value="={}!$B$6".format(ref)).number_format = EUROS
+
+    if meses:
+        fila_total = FILA_TABLA_MESES + len(meses) + 1
+        hoja_ficha.cell(row=fila_total, column=1, value="TOTAL").font = Font(bold=True)
+        celda = hoja_ficha.cell(
+            row=fila_total, column=5,
+            value="=SUM(E{}:E{})".format(FILA_TABLA_MESES + 1, FILA_TABLA_MESES + len(meses)))
+        celda.font = Font(bold=True)
+        celda.number_format = EUROS
+
+
+def _hoja_mes(libro, periodo, filas):
+    """Crea o reemplaza la hoja de un mes. Reemplazar permite rehacer un mes."""
+    if periodo in libro.sheetnames:
+        del libro[periodo]
+    hoja = libro.create_sheet(periodo)
+
+    completas = [f for f in filas if f["horas"] is not None]
+    ultima = PRIMERA_FILA_DATOS + len(filas) - 1
+
+    hoja["A1"] = "{} — {}".format(filas[0]["empleado"], periodo)
     hoja["A1"].font = Font(bold=True, size=13)
 
-    ultima = PRIMERA_FILA_DATOS + len(filas) - 1
-    rango_horas = "D{}:D{}".format(PRIMERA_FILA_DATOS, ultima)
+    hoja["A3"] = "Horas del mes"
+    hoja["B3"] = "=ROUND(SUM(D{}:D{}),2)".format(PRIMERA_FILA_DATOS, ultima)
+    hoja["B3"].number_format = "0.00"
 
-    hoja["A3"] = "Sueldo por hora"
-    hoja["B3"] = None                      # lo rellena una persona
-    hoja["B3"].fill = AZUL_EDITABLE
-    hoja["B3"].border = BORDE
-    hoja["B3"].number_format = EUROS
-    hoja["C3"] = "← escribe aquí el precio hora"
-    hoja["C3"].font = Font(italic=True, color="808080")
+    hoja["A4"] = "Días a revisar"
+    hoja["B4"] = len(filas) - len(completas)
 
-    hoja["A4"] = "Horas del mes"
-    hoja["B4"] = "=ROUND(SUM({}),2)".format(rango_horas)
-    hoja["B4"].number_format = "0.00"
+    hoja["A5"] = "Días con horas"
+    hoja["B5"] = len(completas)
 
-    hoja["A5"] = "Total a pagar"
-    hoja["B5"] = '=IF($B$3="","",ROUND($B$4*$B$3,2))'
-    hoja["B5"].font = Font(bold=True)
-    hoja["B5"].number_format = EUROS
+    hoja["A6"] = "Total a pagar"
+    # El sueldo se lee de la Ficha, no se repite en cada mes.
+    hoja["B6"] = '=IF({0}!$B${1}="","",ROUND($B$3*{0}!$B${1},2))'.format(HOJA_FICHA, FILA_SUELDO)
+    hoja["B6"].font = Font(bold=True)
+    hoja["B6"].number_format = EUROS
 
-    hoja["A6"] = "Días a revisar"
-    hoja["B6"] = len(filas) - len(completas)
-
-    hoja["A3"].font = Font(bold=True)
-    hoja["A5"].font = Font(bold=True)
+    for f in ("A3", "A6"):
+        hoja[f].font = Font(bold=True)
 
     for i, (cabecera, ancho) in enumerate(CABECERAS, start=1):
-        celda = hoja.cell(row=8, column=i, value=cabecera)
+        celda = hoja.cell(row=PRIMERA_FILA_DATOS - 1, column=i, value=cabecera)
         celda.font = Font(bold=True)
         hoja.column_dimensions[get_column_letter(i)].width = ancho
     hoja.freeze_panes = "A{}".format(PRIMERA_FILA_DATOS)
@@ -123,8 +220,7 @@ def _hoja_persona(libro, titulo, filas):
         hoja.cell(row=fila, column=1, value=f["fecha"])
         hoja.cell(row=fila, column=2, value=f["entrada"])
         hoja.cell(row=fila, column=3, value=f["salida"])
-        celda_horas = hoja.cell(row=fila, column=4, value=f["horas"])
-        celda_horas.number_format = "0.00"
+        hoja.cell(row=fila, column=4, value=f["horas"]).number_format = "0.00"
         hoja.cell(row=fila, column=5, value=f["aviso"])
         if f["aviso"]:
             for col in range(1, len(CABECERAS) + 1):
@@ -133,120 +229,27 @@ def _hoja_persona(libro, titulo, filas):
     return hoja
 
 
-def _hoja_resumen(libro, filas, resumen_departamentos, periodo, hojas_por_persona):
-    hoja = libro.create_sheet("Resumen", 0)
-    completas = [f for f in filas if f["horas"] is not None]
+def actualizar_libro(contenido, periodo, filas):
+    """Devuelve el libro con la hoja del mes anadida o reemplazada.
 
-    hoja["A1"] = "Control horario {}".format(periodo)
-    hoja["A1"].font = Font(bold=True, size=14)
-    hoja.append([])
-    hoja.append(["Jornadas con horas", len(completas)])
-    hoja.append(["Pendientes de revisar (en amarillo)", len(filas) - len(completas)])
-    hoja.append(["Empleados", len(hojas_por_persona)])
-    hoja.append([])
+    contenido es el fichero que ya hay en OneDrive, o None la primera vez.
+    """
+    if contenido:
+        libro = load_workbook(io.BytesIO(contenido))
+    else:
+        libro = Workbook()
+        libro.remove(libro.active)
 
-    hoja.append(["Departamento", "Horas", "Días"])
-    for celda in hoja[hoja.max_row]:
-        celda.font = Font(bold=True)
-    for depto, d in resumen_departamentos.items():
-        hoja.append([depto, d["horas"], d["dias"]])
+    primera = filas[0]
+    _hoja_mes(libro, periodo, filas)
+    ficha = _ficha(libro, primera["empleado"], primera["workno"], primera["departamento"])
 
-    hoja.append([])
-    hoja.append(["Empleado", "Horas", "Días", "A revisar", "Sueldo/hora", "Total a pagar"])
-    for celda in hoja[hoja.max_row]:
-        celda.font = Font(bold=True)
+    # Ficha primero y los meses en orden.
+    orden = [HOJA_FICHA] + sorted(h for h in libro.sheetnames if h != HOJA_FICHA)
+    libro._sheets = [libro[h] for h in orden]
 
-    # El sueldo y el total se traen de la hoja de cada persona con formulas, para
-    # que el resumen se actualice solo en cuanto se rellenen los precios hora y
-    # sirva de vista de conjunto para pagar.
-    for titulo, suyas in hojas_por_persona:
-        con_horas = [f for f in suyas if f["horas"] is not None]
-        hoja.append([titulo, round(sum(f["horas"] for f in con_horas), 2),
-                     len(con_horas), len(suyas) - len(con_horas)])
-        fila = hoja.max_row
-        ref = "'{}'".format(titulo.replace("'", "''"))
-        hoja.cell(row=fila, column=5, value="={}!$B$3".format(ref)).number_format = EUROS
-        hoja.cell(row=fila, column=6, value="={}!$B$5".format(ref)).number_format = EUROS
-
-    fila_total = hoja.max_row + 1
-    hoja.cell(row=fila_total, column=1, value="TOTAL").font = Font(bold=True)
-    primera_persona = fila_total - len(hojas_por_persona)
-    celda = hoja.cell(row=fila_total, column=6,
-                      value="=SUM(F{}:F{})".format(primera_persona, fila_total - 1))
-    celda.font = Font(bold=True)
-    celda.number_format = EUROS
-
-    hoja.column_dimensions["A"].width = 36
-    for col in ("B", "C", "D", "E", "F"):
-        hoja.column_dimensions[col].width = 13
-    hoja["A1"].alignment = Alignment(vertical="center")
-    return hoja
-
-
-def construir_libro(filas, resumen_departamentos, periodo):
-    """Un resumen y una hoja por empleado, con los dias a revisar en amarillo."""
-    libro = Workbook()
-    libro.remove(libro.active)
-
-    por_persona = collections.OrderedDict()
-    for f in sorted(filas, key=lambda x: (x["empleado"].lower(), x["fecha"])):
-        por_persona.setdefault((f["workno"], f["empleado"]), []).append(f)
-
-    usados = set()
-    hojas = []
-    for (workno, empleado), suyas in por_persona.items():
-        titulo = nombre_de_hoja(empleado, workno, usados)
-        _hoja_persona(libro, titulo, suyas)
-        hojas.append((titulo, suyas))
-
-    _hoja_resumen(libro, filas, resumen_departamentos, periodo, hojas)
-    logging.info("Libro con %s hojas de empleado mas el resumen", len(hojas))
+    _tabla_de_meses(ficha, libro)
 
     buffer = io.BytesIO()
     libro.save(buffer)
     return buffer.getvalue()
-
-
-INTENTOS_SI_BLOQUEADO = 3
-ESPERA_SI_BLOQUEADO = 20
-
-
-def subir(tk, drive_id, carpeta_id, nombre, contenido):
-    """Sube (o reemplaza) el fichero dentro de la carpeta indicada.
-
-    Si alguien tiene el libro abierto en Excel, OneDrive lo bloquea y Graph
-    responde 423 resourceLocked. En la ejecucion mensual normal no puede pasar,
-    porque el nombre del mes es nuevo y nadie puede tenerlo abierto todavia; se
-    da al rehacer un mes que alguien esta consultando. Se reintenta un par de
-    veces por si es un guardado momentaneo y, si sigue bloqueado, se falla con
-    un mensaje que diga que hay que cerrarlo, en lugar de un 423 a secas.
-    """
-    url = "{}/drives/{}/items/{}:/{}:/content".format(GRAPH, drive_id, carpeta_id, nombre)
-    cabeceras = {
-        "Authorization": "Bearer {}".format(tk),
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }
-
-    for intento in range(1, INTENTOS_SI_BLOQUEADO + 1):
-        respuesta = requests.put(url, headers=cabeceras, data=contenido, timeout=TIMEOUT)
-
-        if respuesta.status_code in (200, 201):
-            datos = respuesta.json()
-            logging.info("Subido %s (%s bytes)", datos.get("name"), datos.get("size"))
-            return datos.get("webUrl")
-
-        if respuesta.status_code == 423 and intento < INTENTOS_SI_BLOQUEADO:
-            logging.warning(
-                "%s esta bloqueado (alguien lo tiene abierto). Reintento %s de %s en %s s",
-                nombre, intento, INTENTOS_SI_BLOQUEADO, ESPERA_SI_BLOQUEADO,
-            )
-            time.sleep(ESPERA_SI_BLOQUEADO)
-            continue
-
-        if respuesta.status_code == 423:
-            raise RuntimeError(
-                "No se pudo escribir {}: alguien lo tiene abierto en Excel. "
-                "Cierralo y vuelve a lanzar la funcion.".format(nombre)
-            )
-
-        raise RuntimeError("Graph rechazo la subida: {} {}".format(respuesta.status_code, respuesta.text[:300]))
