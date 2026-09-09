@@ -6,22 +6,45 @@ vez de cientos, y de paso evita el choque de nombres que sufre el escenario de
 Liquidaciones, porque el PUT reemplaza el fichero si ya existe.
 """
 
+import collections
 import io
 import logging
+import re
 
 import requests
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 TIMEOUT = 120
 
 CABECERAS = [
-    ("fecha", 12), ("nº", 7), ("empleado", 28), ("departamento", 22),
-    ("entrada", 10), ("salida", 10), ("horas", 8), ("fichajes", 9),
-    ("todos los fichajes", 34), ("aviso", 34),
+    ("fecha", 12), ("entrada", 10), ("salida", 10), ("horas", 8),
+    ("fichajes", 9), ("todos los fichajes", 30), ("aviso", 36),
 ]
+
+AMARILLO = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+
+# Excel no admite mas de 31 caracteres ni estos caracteres en el nombre de una hoja.
+PROHIBIDOS = re.compile(r"[:\\/?*\[\]]")
+
+
+def nombre_de_hoja(empleado, workno, usados):
+    """Nombre de hoja valido y unico.
+
+    Se limpia lo que Excel no admite y se recorta a 31 caracteres. Si dos
+    empleados acabaran coincidiendo se anade el numero, que si es unico.
+    """
+    base = PROHIBIDOS.sub(" ", empleado or "").strip() or "Sin nombre"
+    base = " ".join(base.split())[:31]
+    if base.lower() not in usados:
+        usados.add(base.lower())
+        return base
+    sufijo = " ({})".format(workno)
+    base = base[:31 - len(sufijo)] + sufijo
+    usados.add(base.lower())
+    return base
 
 
 def token(tenant_id, client_id, client_secret):
@@ -39,47 +62,96 @@ def token(tenant_id, client_id, client_secret):
     return respuesta.json()["access_token"]
 
 
-def _hoja(libro, titulo, filas):
+def _hoja_persona(libro, titulo, filas):
+    """Una hoja con los dias de un solo empleado.
+
+    Las filas que hay que revisar a mano van en amarillo en vez de en una hoja
+    aparte: asi cada persona ve su mes completo y de un vistazo que dias le
+    faltan por cerrar.
+    """
     hoja = libro.create_sheet(titulo)
+    primera = filas[0]
+
+    hoja["A1"] = "{} — nº {} — {}".format(primera["empleado"], primera["workno"], primera["departamento"])
+    hoja["A1"].font = Font(bold=True, size=13)
+
+    hoja.append([])
     hoja.append([c for c, _ in CABECERAS])
-    for celda in hoja[1]:
+    for celda in hoja[3]:
         celda.font = Font(bold=True)
-    hoja.freeze_panes = "A2"
+    hoja.freeze_panes = "A4"
     for i, (_, ancho) in enumerate(CABECERAS, start=1):
         hoja.column_dimensions[get_column_letter(i)].width = ancho
 
     for f in filas:
-        hoja.append([
-            f["fecha"], f["workno"], f["empleado"], f["departamento"],
-            f["entrada"], f["salida"], f["horas"], f["fichajes"],
-            f["todos"], f["aviso"],
-        ])
+        hoja.append([f["fecha"], f["entrada"], f["salida"], f["horas"],
+                     f["fichajes"], f["todos"], f["aviso"]])
+        if f["aviso"]:
+            for celda in hoja[hoja.max_row]:
+                celda.fill = AMARILLO
+
+    completas = [f for f in filas if f["horas"] is not None]
+    hoja.append([])
+    fila_total = hoja.max_row + 1
+    hoja.cell(row=fila_total, column=1, value="TOTAL").font = Font(bold=True)
+    hoja.cell(row=fila_total, column=4, value=round(sum(f["horas"] for f in completas), 2)).font = Font(bold=True)
+    hoja.cell(row=fila_total, column=6,
+              value="{} días con horas, {} a revisar".format(len(completas), len(filas) - len(completas)))
+    return hoja
+
+
+def _hoja_resumen(libro, filas, resumen_departamentos, periodo, hojas_por_persona):
+    hoja = libro.create_sheet("Resumen", 0)
+    completas = [f for f in filas if f["horas"] is not None]
+
+    hoja["A1"] = "Control horario {}".format(periodo)
+    hoja["A1"].font = Font(bold=True, size=14)
+    hoja.append([])
+    hoja.append(["Jornadas con horas", len(completas)])
+    hoja.append(["Pendientes de revisar (en amarillo)", len(filas) - len(completas)])
+    hoja.append(["Empleados", len(hojas_por_persona)])
+    hoja.append([])
+
+    hoja.append(["Departamento", "Horas", "Días"])
+    for celda in hoja[hoja.max_row]:
+        celda.font = Font(bold=True)
+    for depto, d in resumen_departamentos.items():
+        hoja.append([depto, d["horas"], d["dias"]])
+
+    hoja.append([])
+    hoja.append(["Empleado", "Horas", "Días", "A revisar"])
+    for celda in hoja[hoja.max_row]:
+        celda.font = Font(bold=True)
+    for titulo, suyas in hojas_por_persona:
+        con_horas = [f for f in suyas if f["horas"] is not None]
+        hoja.append([titulo, round(sum(f["horas"] for f in con_horas), 2),
+                     len(con_horas), len(suyas) - len(con_horas)])
+
+    hoja.column_dimensions["A"].width = 36
+    for col in ("B", "C", "D"):
+        hoja.column_dimensions[col].width = 11
+    hoja["A1"].alignment = Alignment(vertical="center")
     return hoja
 
 
 def construir_libro(filas, resumen_departamentos, periodo):
-    """Tres hojas: las jornadas completas, las que hay que revisar y el resumen."""
+    """Un resumen y una hoja por empleado, con los dias a revisar en amarillo."""
     libro = Workbook()
     libro.remove(libro.active)
 
-    completas = [f for f in filas if f["horas"] is not None]
-    revisar = [f for f in filas if f["horas"] is None]
+    por_persona = collections.OrderedDict()
+    for f in sorted(filas, key=lambda x: (x["empleado"].lower(), x["fecha"])):
+        por_persona.setdefault((f["workno"], f["empleado"]), []).append(f)
 
-    _hoja(libro, "Jornadas", completas)
-    _hoja(libro, "A revisar", revisar)
+    usados = set()
+    hojas = []
+    for (workno, empleado), suyas in por_persona.items():
+        titulo = nombre_de_hoja(empleado, workno, usados)
+        _hoja_persona(libro, titulo, suyas)
+        hojas.append((titulo, suyas))
 
-    resumen = libro.create_sheet("Resumen")
-    resumen.append(["Periodo", periodo])
-    resumen.append(["Jornadas completas", len(completas)])
-    resumen.append(["Pendientes de revisar", len(revisar)])
-    resumen.append([])
-    resumen.append(["Departamento", "Horas", "Días"])
-    for celda in resumen[5]:
-        celda.font = Font(bold=True)
-    for depto, d in resumen_departamentos.items():
-        resumen.append([depto, d["horas"], d["dias"]])
-    resumen.column_dimensions["A"].width = 26
-    resumen.column_dimensions["B"].width = 12
+    _hoja_resumen(libro, filas, resumen_departamentos, periodo, hojas)
+    logging.info("Libro con %s hojas de empleado mas el resumen", len(hojas))
 
     buffer = io.BytesIO()
     libro.save(buffer)
