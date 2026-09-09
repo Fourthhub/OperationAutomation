@@ -37,8 +37,42 @@ FILA_SUELDO = 6            # Ficha!B6 es la unica celda que se rellena a mano
 FILA_TABLA_MESES = 9       # cabecera de la tabla de meses en la Ficha
 PRIMERA_FILA_DATOS = 8     # en la hoja de un mes: 1 titulo, 3-5 totales, 7 cabeceras
 
-PROHIBIDOS_HOJA = re.compile(r"[:\\/?*\[\]]")
 PROHIBIDOS_FICHERO = re.compile(r'[<>:"/\\|?*]')
+
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+ORDEN_MES = {m: i for i, m in enumerate(MESES)}
+PERIODO_ANTIGUO = re.compile(r"^(\d{4})-(\d{2})$")
+
+
+def nombre_de_mes(periodo):
+    """'2026-08' -> 'agosto'."""
+    return MESES[int(periodo[5:7]) - 1]
+
+
+def _orden_de_hoja(nombre):
+    """Ordena las hojas por mes natural, no alfabeticamente.
+
+    Sin esto 'agosto' iria antes que 'enero', que es justo lo que no queremos.
+    """
+    return ORDEN_MES.get(nombre, 99)
+
+
+def _migrar_nombres_antiguos(libro):
+    """Renombra las hojas 'YYYY-MM' de la primera version a nombre de mes.
+
+    Sin esto, al anadir 'agosto' quedaria junto a la vieja '2026-08' y el mes
+    apareceria dos veces en la ficha.
+    """
+    for hoja in list(libro.worksheets):
+        m = PERIODO_ANTIGUO.match(hoja.title)
+        if not m:
+            continue
+        nuevo = MESES[int(m.group(2)) - 1]
+        if nuevo in libro.sheetnames:
+            del libro[hoja.title]
+        else:
+            hoja.title = nuevo
 
 
 def nombre_de_fichero(empleado, workno):
@@ -158,7 +192,7 @@ def _tabla_de_meses(hoja_ficha, libro):
         celda = hoja_ficha.cell(row=FILA_TABLA_MESES, column=i, value=c)
         celda.font = Font(bold=True)
 
-    meses = sorted(h for h in libro.sheetnames if h != HOJA_FICHA)
+    meses = sorted((h for h in libro.sheetnames if h != HOJA_FICHA), key=_orden_de_hoja)
     for n, mes in enumerate(meses, start=1):
         fila = FILA_TABLA_MESES + n
         ref = "'{}'".format(mes)
@@ -180,14 +214,16 @@ def _tabla_de_meses(hoja_ficha, libro):
 
 def _hoja_mes(libro, periodo, filas):
     """Crea o reemplaza la hoja de un mes. Reemplazar permite rehacer un mes."""
-    if periodo in libro.sheetnames:
-        del libro[periodo]
-    hoja = libro.create_sheet(periodo)
+    titulo = nombre_de_mes(periodo)
+    if titulo in libro.sheetnames:
+        del libro[titulo]
+    hoja = libro.create_sheet(titulo)
 
     completas = [f for f in filas if f["horas"] is not None]
     ultima = PRIMERA_FILA_DATOS + len(filas) - 1
 
-    hoja["A1"] = "{} — {}".format(filas[0]["empleado"], periodo)
+    # El anio no cabe en el nombre de la hoja, asi que va en el titulo de dentro.
+    hoja["A1"] = "{} — {} {}".format(filas[0]["empleado"], titulo, periodo[:4])
     hoja["A1"].font = Font(bold=True, size=13)
 
     hoja["A3"] = "Horas del mes"
@@ -241,11 +277,12 @@ def actualizar_libro(contenido, periodo, filas):
         libro.remove(libro.active)
 
     primera = filas[0]
+    _migrar_nombres_antiguos(libro)
     _hoja_mes(libro, periodo, filas)
     ficha = _ficha(libro, primera["empleado"], primera["workno"], primera["departamento"])
 
     # Ficha primero y los meses en orden.
-    orden = [HOJA_FICHA] + sorted(h for h in libro.sheetnames if h != HOJA_FICHA)
+    orden = [HOJA_FICHA] + sorted((h for h in libro.sheetnames if h != HOJA_FICHA), key=_orden_de_hoja)
     libro._sheets = [libro[h] for h in orden]
 
     _tabla_de_meses(ficha, libro)
