@@ -18,10 +18,13 @@ import collections
 import datetime
 import logging
 import os
+import time
 
 import azure.functions as func
 
 from . import crosschex, jornadas, onedrive
+
+ESPERA_SEGUNDA_PASADA = 60   # margen para que alguien cierre su Excel
 
 
 def mes_anterior(hoy=None):
@@ -63,24 +66,47 @@ def main(myTimer: func.TimerRequest) -> None:
     drive_id = os.environ["onedrive_drive_id"]
     carpeta_id = os.environ["onedrive_carpeta_id"]
 
-    nuevos, actualizados, fallidos = 0, 0, []
+    resultado = _escribir(tk, drive_id, carpeta_id, periodo, gente)
+
+    # Segunda pasada solo para los que estaban abiertos en Excel. Se hace al
+    # final y una sola vez: esperar delante de cada uno agotaria los diez
+    # minutos de la funcion si hay muchos abiertos a la vez.
+    if resultado["bloqueados"]:
+        logging.info("Fichajes: %s ficheros estaban abiertos, segunda pasada en %s s",
+                     len(resultado["bloqueados"]), ESPERA_SEGUNDA_PASADA)
+        time.sleep(ESPERA_SEGUNDA_PASADA)
+        pendientes = {k: v for k, v in gente.items()
+                      if onedrive.nombre_de_fichero(k[1], k[0]) in resultado["bloqueados"]}
+        segunda = _escribir(tk, drive_id, carpeta_id, periodo, pendientes)
+        resultado["nuevos"] += segunda["nuevos"]
+        resultado["actualizados"] += segunda["actualizados"]
+        resultado["bloqueados"] = segunda["bloqueados"]
+        resultado["fallidos"] += segunda["fallidos"]
+
+    logging.info("Fichajes: %s nuevos, %s actualizados, %s abiertos en Excel, %s con error",
+                 resultado["nuevos"], resultado["actualizados"],
+                 len(resultado["bloqueados"]), len(resultado["fallidos"]))
+
+    if resultado["bloqueados"]:
+        logging.warning("Fichajes: sin actualizar por estar abiertos: %s",
+                        ", ".join(resultado["bloqueados"]))
+    if resultado["fallidos"]:
+        raise RuntimeError("Fallo al escribir: {}".format(", ".join(resultado["fallidos"])))
+
+
+def _escribir(tk, drive_id, carpeta_id, periodo, gente):
+    """Escribe el fichero de cada empleado. Cada uno aislado de los demas."""
+    r = {"nuevos": 0, "actualizados": 0, "bloqueados": [], "fallidos": []}
     for (workno, empleado), suyas in gente.items():
         nombre = onedrive.nombre_de_fichero(empleado, workno)
         try:
-            # Cada empleado se aisla del resto: si uno tiene su fichero abierto
-            # en Excel, no puede tumbar los otros 48.
             existente = onedrive.descargar(tk, drive_id, carpeta_id, nombre)
             contenido = onedrive.actualizar_libro(existente, periodo, suyas)
             onedrive.subir(tk, drive_id, carpeta_id, nombre, contenido)
-            if existente:
-                actualizados += 1
-            else:
-                nuevos += 1
+            r["actualizados" if existente else "nuevos"] += 1
+        except onedrive.Bloqueado:
+            r["bloqueados"].append(nombre)
         except Exception as e:
             logging.error("Fichajes: fallo con %s: %s", nombre, e)
-            fallidos.append(nombre)
-
-    logging.info("Fichajes: %s ficheros nuevos, %s actualizados, %s con fallo",
-                 nuevos, actualizados, len(fallidos))
-    if fallidos:
-        raise RuntimeError("No se pudo escribir el fichero de: {}".format(", ".join(fallidos)))
+            r["fallidos"].append(nombre)
+    return r

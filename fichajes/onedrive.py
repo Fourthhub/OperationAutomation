@@ -17,6 +17,7 @@ import time
 import requests
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Border, Font, PatternFill, Side
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
 
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -33,9 +34,18 @@ BORDE = Border(*[Side(style="thin", color="9BC2E6")] * 4)
 EUROS = '#,##0.00 "€"'
 
 HOJA_FICHA = "Ficha"
-FILA_SUELDO = 6            # Ficha!B6 es la unica celda que se rellena a mano
-FILA_TABLA_MESES = 9       # cabecera de la tabla de meses en la Ficha
-PRIMERA_FILA_DATOS = 8     # en la hoja de un mes: 1 titulo, 3-5 totales, 7 cabeceras
+# Celdas que se rellenan a mano en la Ficha.
+FILA_SUELDO = 6
+FILA_TIPO = 7
+FILA_HORAS_CONTRATO = 8
+
+FILA_TABLA_MESES = 11      # cabecera de la tabla de meses en la Ficha
+FILA_LIMPIEZA = 9          # desde donde se borra al rehacer la tabla; las
+                           # primeras versiones la tenian en la 9
+PRIMERA_FILA_DATOS = 10    # en la hoja de un mes: 1 titulo, 3-8 totales, 9 cabeceras
+
+PAGO_POR_HORAS = "horas"
+PAGO_POR_CONTRATO = "contrato"
 
 PROHIBIDOS_FICHERO = re.compile(r'[<>:"/\\|?*]')
 
@@ -99,8 +109,8 @@ def token(tenant_id, client_id, client_secret):
 
 # --- Graph -----------------------------------------------------------------
 
-INTENTOS_SI_BLOQUEADO = 3
-ESPERA_SI_BLOQUEADO = 20
+class Bloqueado(RuntimeError):
+    """El fichero esta abierto en Excel y OneDrive no deja escribirlo."""
 
 
 def _cabeceras(tk, tipo=None):
@@ -123,50 +133,69 @@ def descargar(tk, drive_id, carpeta_id, nombre):
 def subir(tk, drive_id, carpeta_id, nombre, contenido):
     """Sube o reemplaza el fichero.
 
-    Si alguien lo tiene abierto en Excel, OneDrive lo bloquea y Graph responde
-    423 resourceLocked. Se reintenta un par de veces por si es un guardado
-    momentaneo y si sigue bloqueado se avisa de que hay que cerrarlo.
+    Si alguien lo tiene abierto en Excel, OneDrive responde 423 y aqui se sale
+    enseguida con Bloqueado, sin esperar. Antes se reintentaba dos veces con
+    veinte segundos de pausa y eso, con muchos ficheros abiertos a la vez,
+    llegaria a agotar los diez minutos de la funcion. Quien llama junta los
+    bloqueados y les da una segunda pasada al final.
     """
     url = "{}/drives/{}/items/{}:/{}:/content".format(GRAPH, drive_id, carpeta_id, nombre)
     tipo = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    respuesta = requests.put(url, headers=_cabeceras(tk, tipo), data=contenido, timeout=TIMEOUT)
 
-    for intento in range(1, INTENTOS_SI_BLOQUEADO + 1):
-        respuesta = requests.put(url, headers=_cabeceras(tk, tipo), data=contenido, timeout=TIMEOUT)
+    if respuesta.status_code in (200, 201):
+        datos = respuesta.json()
+        logging.info("Subido %s (%s bytes)", datos.get("name"), datos.get("size"))
+        return datos.get("webUrl")
 
-        if respuesta.status_code in (200, 201):
-            datos = respuesta.json()
-            logging.info("Subido %s (%s bytes)", datos.get("name"), datos.get("size"))
-            return datos.get("webUrl")
+    if respuesta.status_code == 423:
+        raise Bloqueado("{} esta abierto en Excel".format(nombre))
 
-        if respuesta.status_code == 423 and intento < INTENTOS_SI_BLOQUEADO:
-            logging.warning("%s bloqueado, reintento %s de %s en %s s",
-                            nombre, intento, INTENTOS_SI_BLOQUEADO, ESPERA_SI_BLOQUEADO)
-            time.sleep(ESPERA_SI_BLOQUEADO)
-            continue
-
-        if respuesta.status_code == 423:
-            raise RuntimeError(
-                "No se pudo escribir {}: alguien lo tiene abierto en Excel.".format(nombre))
-
-        raise RuntimeError("Graph rechazo la subida de {}: {} {}".format(
-            nombre, respuesta.status_code, respuesta.text[:250]))
+    raise RuntimeError("Graph rechazo la subida de {}: {} {}".format(
+        nombre, respuesta.status_code, respuesta.text[:250]))
 
 
 # --- Construccion del libro ------------------------------------------------
 
 def _ficha(libro, empleado, workno, departamento):
-    """Crea la hoja Ficha si no existe. Nunca pisa el sueldo ya escrito."""
-    if HOJA_FICHA in libro.sheetnames:
-        hoja = libro[HOJA_FICHA]
-    else:
-        hoja = libro.create_sheet(HOJA_FICHA, 0)
-        hoja["A6"] = "SUELDO POR HORA"
-        hoja["A6"].font = Font(bold=True)
-        hoja["B6"].fill = AZUL_EDITABLE
-        hoja["B6"].border = BORDE
-        hoja["B6"].number_format = EUROS
-        hoja["C6"] = "← se escribe una sola vez, vale para todos los meses"
-        hoja["C6"].font = Font(italic=True, color="808080")
+    """Crea o completa la hoja Ficha. Nunca pisa lo que haya escrito una persona.
+
+    Las etiquetas y el desplegable se reponen en cada ejecucion, para que los
+    ficheros creados por versiones anteriores acaben teniendo tambien el
+    selector de tipo de pago. Los valores solo se rellenan si estan vacios.
+    """
+    nueva = HOJA_FICHA not in libro.sheetnames
+    hoja = libro.create_sheet(HOJA_FICHA, 0) if nueva else libro[HOJA_FICHA]
+
+    for fila, etiqueta, pista in (
+        (FILA_SUELDO, "SUELDO POR HORA",
+         "← se escribe una sola vez, vale para todos los meses"),
+        (FILA_TIPO, "TIPO DE PAGO",
+         "← 'horas' paga todas las horas; 'contrato' paga solo las extra"),
+        (FILA_HORAS_CONTRATO, "HORAS POR CONTRATO",
+         "← horas mensuales del contrato (solo si es por contrato)"),
+    ):
+        hoja.cell(row=fila, column=1, value=etiqueta).font = Font(bold=True)
+        celda = hoja.cell(row=fila, column=2)
+        celda.fill = AZUL_EDITABLE
+        celda.border = BORDE
+        hoja.cell(row=fila, column=3, value=pista).font = Font(italic=True, color="808080")
+
+    hoja.cell(row=FILA_SUELDO, column=2).number_format = EUROS
+    hoja.cell(row=FILA_HORAS_CONTRATO, column=2).number_format = "0.00"
+
+    validacion = DataValidation(
+        type="list",
+        formula1='"{},{}"'.format(PAGO_POR_HORAS, PAGO_POR_CONTRATO),
+        allow_blank=True,
+    )
+    hoja.add_data_validation(validacion)
+    celda_tipo = hoja.cell(row=FILA_TIPO, column=2)
+    validacion.add(celda_tipo)
+    # Por defecto 'horas', que es como venia funcionando: asi solo hay que tocar
+    # la ficha de quien cobre por contrato.
+    if celda_tipo.value is None:
+        celda_tipo.value = PAGO_POR_HORAS
 
     hoja["A1"] = empleado
     hoja["A1"].font = Font(bold=True, size=14)
@@ -183,11 +212,13 @@ def _ficha(libro, empleado, workno, departamento):
 
 def _tabla_de_meses(hoja_ficha, libro):
     """Rehace la tabla de meses de la Ficha a partir de las hojas que hay."""
-    for fila in range(FILA_TABLA_MESES, hoja_ficha.max_row + 2):
-        for col in range(1, 6):
+    # Se limpia desde FILA_LIMPIEZA y no desde la cabecera actual, porque las
+    # primeras versiones ponian la tabla dos filas mas arriba.
+    for fila in range(FILA_LIMPIEZA, hoja_ficha.max_row + 2):
+        for col in range(1, 7):
             hoja_ficha.cell(row=fila, column=col).value = None
 
-    cabeceras = ["Mes", "Horas", "Días", "A revisar", "Total a pagar"]
+    cabeceras = ["Mes", "Horas", "Días", "A revisar", "Horas extra", "Total a pagar"]
     for i, c in enumerate(cabeceras, start=1):
         celda = hoja_ficha.cell(row=FILA_TABLA_MESES, column=i, value=c)
         celda.font = Font(bold=True)
@@ -200,14 +231,15 @@ def _tabla_de_meses(hoja_ficha, libro):
         hoja_ficha.cell(row=fila, column=2, value="={}!$B$3".format(ref)).number_format = "0.00"
         hoja_ficha.cell(row=fila, column=3, value="={}!$B$5".format(ref))
         hoja_ficha.cell(row=fila, column=4, value="={}!$B$4".format(ref))
-        hoja_ficha.cell(row=fila, column=5, value="={}!$B$6".format(ref)).number_format = EUROS
+        hoja_ficha.cell(row=fila, column=5, value="={}!$B$8".format(ref)).number_format = "0.00"
+        hoja_ficha.cell(row=fila, column=6, value="={}!$B$6".format(ref)).number_format = EUROS
 
     if meses:
         fila_total = FILA_TABLA_MESES + len(meses) + 1
         hoja_ficha.cell(row=fila_total, column=1, value="TOTAL").font = Font(bold=True)
         celda = hoja_ficha.cell(
-            row=fila_total, column=5,
-            value="=SUM(E{}:E{})".format(FILA_TABLA_MESES + 1, FILA_TABLA_MESES + len(meses)))
+            row=fila_total, column=6,
+            value="=SUM(F{}:F{})".format(FILA_TABLA_MESES + 1, FILA_TABLA_MESES + len(meses)))
         celda.font = Font(bold=True)
         celda.number_format = EUROS
 
@@ -236,13 +268,35 @@ def _hoja_mes(libro, periodo, filas):
     hoja["A5"] = "Días con horas"
     hoja["B5"] = len(completas)
 
+    sueldo = "{}!$B${}".format(HOJA_FICHA, FILA_SUELDO)
+    tipo = "{}!$B${}".format(HOJA_FICHA, FILA_TIPO)
+    contrato = "{}!$B${}".format(HOJA_FICHA, FILA_HORAS_CONTRATO)
+
+    hoja["A7"] = "Horas de contrato"
+    hoja["B7"] = '=IF({}="{}",{},"")'.format(tipo, PAGO_POR_CONTRATO, contrato)
+    hoja["B7"].number_format = "0.00"
+
+    hoja["A8"] = "Horas extra"
+    # Puede salir negativo, y se deja verse: significa que esa persona ha hecho
+    # menos horas de las que dice su contrato, y es un dato que interesa.
+    hoja["B8"] = '=IF({}="{}",ROUND($B$3-{},2),"")'.format(tipo, PAGO_POR_CONTRATO, contrato)
+    hoja["B8"].number_format = "0.00"
+
     hoja["A6"] = "Total a pagar"
-    # El sueldo se lee de la Ficha, no se repite en cada mes.
-    hoja["B6"] = '=IF({0}!$B${1}="","",ROUND($B$3*{0}!$B${1},2))'.format(HOJA_FICHA, FILA_SUELDO)
+    # El sueldo y el tipo de pago se leen de la Ficha, no se repiten en cada mes.
+    #   por horas    -> se pagan todas las horas del mes
+    #   por contrato -> solo las que exceden las del contrato
+    # Las horas extra negativas no restan dinero: se pagan cero y el numero en
+    # rojo queda arriba para quien lo tenga que mirar.
+    hoja["B6"] = (
+        '=IF({sueldo}="","",'
+        'IF({tipo}="{contrato_lit}",ROUND(MAX(0,$B$8)*{sueldo},2),'
+        'ROUND($B$3*{sueldo},2)))'
+    ).format(sueldo=sueldo, tipo=tipo, contrato_lit=PAGO_POR_CONTRATO)
     hoja["B6"].font = Font(bold=True)
     hoja["B6"].number_format = EUROS
 
-    for f in ("A3", "A6"):
+    for f in ("A3", "A6", "A8"):
         hoja[f].font = Font(bold=True)
 
     for i, (cabecera, ancho) in enumerate(CABECERAS, start=1):
