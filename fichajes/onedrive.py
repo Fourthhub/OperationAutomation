@@ -14,18 +14,22 @@ import time
 
 import requests
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 TIMEOUT = 120
 
-CABECERAS = [
-    ("fecha", 12), ("entrada", 10), ("salida", 10), ("horas", 8),
-    ("fichajes", 9), ("todos los fichajes", 30), ("aviso", 36),
-]
+CABECERAS = [("fecha", 12), ("entrada", 10), ("salida", 10), ("horas", 9), ("aviso", 46)]
 
 AMARILLO = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+# Azul claro para la celda que rellena una persona, para que no se confunda con
+# el amarillo, que aqui significa "este dia hay que revisarlo".
+AZUL_EDITABLE = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
+BORDE = Border(*[Side(style="thin", color="9BC2E6")] * 4)
+
+EUROS = '#,##0.00 "€"'
+PRIMERA_FILA_DATOS = 9   # 1 titulo, 2 blanco, 3-6 bloque de sueldo, 7 blanco, 8 cabeceras
 
 # Excel no admite mas de 31 caracteres ni estos caracteres en el nombre de una hoja.
 PROHIBIDOS = re.compile(r"[:\\/?*\[\]]")
@@ -66,38 +70,66 @@ def token(tenant_id, client_id, client_secret):
 def _hoja_persona(libro, titulo, filas):
     """Una hoja con los dias de un solo empleado.
 
-    Las filas que hay que revisar a mano van en amarillo en vez de en una hoja
-    aparte: asi cada persona ve su mes completo y de un vistazo que dias le
-    faltan por cerrar.
+    Los dias que hay que revisar a mano van en amarillo en vez de en una hoja
+    aparte, para que cada persona vea su mes completo de un vistazo.
+
+    Arriba queda el bloque de sueldo: B3 es la unica celda que se rellena a
+    mano, y las horas y el total a pagar son formulas de Excel, no numeros
+    calculados aqui. Asi el total se recalcula solo en cuanto se escribe el
+    precio hora, y tambien si alguien corrige a mano las horas de un dia que
+    estaba en amarillo.
     """
     hoja = libro.create_sheet(titulo)
     primera = filas[0]
+    completas = [f for f in filas if f["horas"] is not None]
 
     hoja["A1"] = "{} — nº {} — {}".format(primera["empleado"], primera["workno"], primera["departamento"])
     hoja["A1"].font = Font(bold=True, size=13)
 
-    hoja.append([])
-    hoja.append([c for c, _ in CABECERAS])
-    for celda in hoja[3]:
+    ultima = PRIMERA_FILA_DATOS + len(filas) - 1
+    rango_horas = "D{}:D{}".format(PRIMERA_FILA_DATOS, ultima)
+
+    hoja["A3"] = "Sueldo por hora"
+    hoja["B3"] = None                      # lo rellena una persona
+    hoja["B3"].fill = AZUL_EDITABLE
+    hoja["B3"].border = BORDE
+    hoja["B3"].number_format = EUROS
+    hoja["C3"] = "← escribe aquí el precio hora"
+    hoja["C3"].font = Font(italic=True, color="808080")
+
+    hoja["A4"] = "Horas del mes"
+    hoja["B4"] = "=ROUND(SUM({}),2)".format(rango_horas)
+    hoja["B4"].number_format = "0.00"
+
+    hoja["A5"] = "Total a pagar"
+    hoja["B5"] = '=IF($B$3="","",ROUND($B$4*$B$3,2))'
+    hoja["B5"].font = Font(bold=True)
+    hoja["B5"].number_format = EUROS
+
+    hoja["A6"] = "Días a revisar"
+    hoja["B6"] = len(filas) - len(completas)
+
+    hoja["A3"].font = Font(bold=True)
+    hoja["A5"].font = Font(bold=True)
+
+    for i, (cabecera, ancho) in enumerate(CABECERAS, start=1):
+        celda = hoja.cell(row=8, column=i, value=cabecera)
         celda.font = Font(bold=True)
-    hoja.freeze_panes = "A4"
-    for i, (_, ancho) in enumerate(CABECERAS, start=1):
         hoja.column_dimensions[get_column_letter(i)].width = ancho
+    hoja.freeze_panes = "A{}".format(PRIMERA_FILA_DATOS)
 
-    for f in filas:
-        hoja.append([f["fecha"], f["entrada"], f["salida"], f["horas"],
-                     f["fichajes"], f["todos"], f["aviso"]])
+    for n, f in enumerate(filas):
+        fila = PRIMERA_FILA_DATOS + n
+        hoja.cell(row=fila, column=1, value=f["fecha"])
+        hoja.cell(row=fila, column=2, value=f["entrada"])
+        hoja.cell(row=fila, column=3, value=f["salida"])
+        celda_horas = hoja.cell(row=fila, column=4, value=f["horas"])
+        celda_horas.number_format = "0.00"
+        hoja.cell(row=fila, column=5, value=f["aviso"])
         if f["aviso"]:
-            for celda in hoja[hoja.max_row]:
-                celda.fill = AMARILLO
+            for col in range(1, len(CABECERAS) + 1):
+                hoja.cell(row=fila, column=col).fill = AMARILLO
 
-    completas = [f for f in filas if f["horas"] is not None]
-    hoja.append([])
-    fila_total = hoja.max_row + 1
-    hoja.cell(row=fila_total, column=1, value="TOTAL").font = Font(bold=True)
-    hoja.cell(row=fila_total, column=4, value=round(sum(f["horas"] for f in completas), 2)).font = Font(bold=True)
-    hoja.cell(row=fila_total, column=6,
-              value="{} días con horas, {} a revisar".format(len(completas), len(filas) - len(completas)))
     return hoja
 
 
@@ -120,17 +152,33 @@ def _hoja_resumen(libro, filas, resumen_departamentos, periodo, hojas_por_person
         hoja.append([depto, d["horas"], d["dias"]])
 
     hoja.append([])
-    hoja.append(["Empleado", "Horas", "Días", "A revisar"])
+    hoja.append(["Empleado", "Horas", "Días", "A revisar", "Sueldo/hora", "Total a pagar"])
     for celda in hoja[hoja.max_row]:
         celda.font = Font(bold=True)
+
+    # El sueldo y el total se traen de la hoja de cada persona con formulas, para
+    # que el resumen se actualice solo en cuanto se rellenen los precios hora y
+    # sirva de vista de conjunto para pagar.
     for titulo, suyas in hojas_por_persona:
         con_horas = [f for f in suyas if f["horas"] is not None]
         hoja.append([titulo, round(sum(f["horas"] for f in con_horas), 2),
                      len(con_horas), len(suyas) - len(con_horas)])
+        fila = hoja.max_row
+        ref = "'{}'".format(titulo.replace("'", "''"))
+        hoja.cell(row=fila, column=5, value="={}!$B$3".format(ref)).number_format = EUROS
+        hoja.cell(row=fila, column=6, value="={}!$B$5".format(ref)).number_format = EUROS
+
+    fila_total = hoja.max_row + 1
+    hoja.cell(row=fila_total, column=1, value="TOTAL").font = Font(bold=True)
+    primera_persona = fila_total - len(hojas_por_persona)
+    celda = hoja.cell(row=fila_total, column=6,
+                      value="=SUM(F{}:F{})".format(primera_persona, fila_total - 1))
+    celda.font = Font(bold=True)
+    celda.number_format = EUROS
 
     hoja.column_dimensions["A"].width = 36
-    for col in ("B", "C", "D"):
-        hoja.column_dimensions[col].width = 11
+    for col in ("B", "C", "D", "E", "F"):
+        hoja.column_dimensions[col].width = 13
     hoja["A1"].alignment = Alignment(vertical="center")
     return hoja
 

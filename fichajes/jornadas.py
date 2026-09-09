@@ -4,7 +4,9 @@ import collections
 import datetime
 
 AVISO_FALTA_SALIDA = "REVISAR: falta la salida"
-AVISO_PARTIDA = "REVISAR: jornada partida ({} fichajes)"
+# Los fichajes intermedios van dentro del propio aviso: son lo que hace falta
+# para cuadrar la jornada a mano, y ya no hay una columna donde ponerlos.
+AVISO_PARTIDA = "REVISAR: jornada partida — {}"
 
 
 def _horas_entre(entrada, salida):
@@ -49,7 +51,7 @@ def agrupar(registros):
             trabajado = _horas_entre(entrada, salida)
         else:
             salida = horas[-1]
-            aviso = AVISO_PARTIDA.format(len(horas))
+            aviso = AVISO_PARTIDA.format(" ".join(h[:5] for h in horas))
 
         filas.append({
             "fecha": fecha,
