@@ -10,6 +10,7 @@ import collections
 import io
 import logging
 import re
+import time
 
 import requests
 from openpyxl import Workbook
@@ -158,18 +159,46 @@ def construir_libro(filas, resumen_departamentos, periodo):
     return buffer.getvalue()
 
 
+INTENTOS_SI_BLOQUEADO = 3
+ESPERA_SI_BLOQUEADO = 20
+
+
 def subir(tk, drive_id, carpeta_id, nombre, contenido):
-    """Sube (o reemplaza) el fichero dentro de la carpeta indicada."""
+    """Sube (o reemplaza) el fichero dentro de la carpeta indicada.
+
+    Si alguien tiene el libro abierto en Excel, OneDrive lo bloquea y Graph
+    responde 423 resourceLocked. En la ejecucion mensual normal no puede pasar,
+    porque el nombre del mes es nuevo y nadie puede tenerlo abierto todavia; se
+    da al rehacer un mes que alguien esta consultando. Se reintenta un par de
+    veces por si es un guardado momentaneo y, si sigue bloqueado, se falla con
+    un mensaje que diga que hay que cerrarlo, en lugar de un 423 a secas.
+    """
     url = "{}/drives/{}/items/{}:/{}:/content".format(GRAPH, drive_id, carpeta_id, nombre)
-    respuesta = requests.put(
-        url,
-        headers={"Authorization": "Bearer {}".format(tk),
-                 "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
-        data=contenido,
-        timeout=TIMEOUT,
-    )
-    if respuesta.status_code not in (200, 201):
+    cabeceras = {
+        "Authorization": "Bearer {}".format(tk),
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+
+    for intento in range(1, INTENTOS_SI_BLOQUEADO + 1):
+        respuesta = requests.put(url, headers=cabeceras, data=contenido, timeout=TIMEOUT)
+
+        if respuesta.status_code in (200, 201):
+            datos = respuesta.json()
+            logging.info("Subido %s (%s bytes)", datos.get("name"), datos.get("size"))
+            return datos.get("webUrl")
+
+        if respuesta.status_code == 423 and intento < INTENTOS_SI_BLOQUEADO:
+            logging.warning(
+                "%s esta bloqueado (alguien lo tiene abierto). Reintento %s de %s en %s s",
+                nombre, intento, INTENTOS_SI_BLOQUEADO, ESPERA_SI_BLOQUEADO,
+            )
+            time.sleep(ESPERA_SI_BLOQUEADO)
+            continue
+
+        if respuesta.status_code == 423:
+            raise RuntimeError(
+                "No se pudo escribir {}: alguien lo tiene abierto en Excel. "
+                "Cierralo y vuelve a lanzar la funcion.".format(nombre)
+            )
+
         raise RuntimeError("Graph rechazo la subida: {} {}".format(respuesta.status_code, respuesta.text[:300]))
-    datos = respuesta.json()
-    logging.info("Subido %s (%s bytes)", datos.get("name"), datos.get("size"))
-    return datos.get("webUrl")
